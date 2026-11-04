@@ -218,6 +218,10 @@ const en = {
   sortStatus: 'Status (red first)',
   sortName: 'Name',
   clearFilters: 'Clear filters',
+  highlight: 'Highlight',
+  highlightEn: 'Highlight (English)',
+  highlightZh: 'Highlight (Chinese)',
+  highlightHint: 'One line on why it is useful: ready to eat or needs cooking, how long it keeps, main benefit.',
   sortReorderHint: 'Reorder works in "My order" only.',
   priorityHint: 'Essential: needed to stay alive and healthy. Important: makes meals and health much better. Nice to have: comfort and treats.',
   stockRuleHint: 'Buy extra on sale: keeps for years and you use a lot. Keep at target: buy what the target needs. Do not overstock: loses quality or expires within about a year.',
@@ -430,6 +434,10 @@ const zh: Record<TKey, string> = {
   sortStatus: '狀態（紅色先）',
   sortName: '名稱',
   clearFilters: '清除篩選',
+  highlight: '重點',
+  highlightEn: '重點（英文）',
+  highlightZh: '重點（中文）',
+  highlightHint: '一句說明用途：是否即食、可存放多久、主要好處。',
   sortReorderHint: '只可在「我的次序」中調整排序。',
   priorityHint: '必需：維持生命及健康所需。重要：令膳食及健康好得多。可有可無：舒適及零食。',
   stockRuleHint: '特價時多買：可存放多年而且用量大。保持目標量：按目標購買。不宜多存：約一年內會變質或過期。',
@@ -479,6 +487,12 @@ const words: Record<string, string> = {
 export function word(lang: Lang, w: string): string {
   if (lang === 'zh-Hant') return words[w] ?? w
   return w
+}
+
+export function itemHighlight(lang: Lang, item: { highlight_en: string | null; highlight_zh: string | null }): string {
+  const first = lang === 'zh-Hant' ? item.highlight_zh : item.highlight_en
+  const second = lang === 'zh-Hant' ? item.highlight_en : item.highlight_zh
+  return (first?.trim() ? first : second?.trim()) || ''
 }
 
 export function itemName(lang: Lang, item: { name_en: string; name_zh: string }): string {

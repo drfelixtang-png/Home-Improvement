@@ -18,6 +18,8 @@ export function ItemForm({ id }: { id?: string }) {
     target_qty: existing ? String(existing.target_qty) : '',
     location: existing?.location ?? 'Kitchen',
     notes: existing?.notes ?? '',
+    highlight_en: existing?.highlight_en ?? '',
+    highlight_zh: existing?.highlight_zh ?? '',
     step_qty: existing ? String(existing.step_qty ?? 1) : '1',
     priority: existing?.priority ?? 'important',
     stock_rule: existing?.stock_rule ?? 'keep',
@@ -42,6 +44,8 @@ export function ItemForm({ id }: { id?: string }) {
       target_qty: Number.isFinite(target) && target >= 0 ? target : 0,
       location: f.location,
       notes: f.notes.trim() || null,
+      highlight_en: f.highlight_en.trim() || null,
+      highlight_zh: f.highlight_zh.trim() || null,
       step_qty: Number(f.step_qty) > 0 ? Number(f.step_qty) : 1,
       priority: f.priority as Priority,
       stock_rule: f.stock_rule as StockRule,
@@ -111,6 +115,15 @@ export function ItemForm({ id }: { id?: string }) {
             ))}
           </select>
         </label>
+        <label>
+          <span>{t('highlightEn')}</span>
+          <input value={f.highlight_en} onChange={set('highlight_en')} />
+        </label>
+        <label>
+          <span>{t('highlightZh')}</span>
+          <input value={f.highlight_zh} onChange={set('highlight_zh')} lang="zh-Hant" />
+        </label>
+        <p className="muted span-2 hint">{t('highlightHint')}</p>
         <label>
           <span>{t('priority')}</span>
           <select value={f.priority} onChange={set('priority')}>

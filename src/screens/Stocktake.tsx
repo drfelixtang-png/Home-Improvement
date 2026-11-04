@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useStore } from '../lib/store'
 import { go } from '../lib/router'
-import { itemName, word } from '../lib/i18n'
+import { itemHighlight, itemName, word } from '../lib/i18n'
 import { formatQty } from '../lib/dates'
 import { locationRank, summarise } from '../lib/status'
 import type { ItemSummary } from '../lib/status'
@@ -151,6 +151,8 @@ export function StocktakeScreen() {
           {word(lang, s.item.location)} · {t('onHand')} {formatQty(s.onHand)} / {formatQty(Number(s.item.target_qty))}{' '}
           {word(lang, s.item.unit)}
           {s.item.notes ? ` · ${s.item.notes}` : ''}
+        </p>
+        <p className="item-highlight">{itemHighlight(lang, s.item)}
         </p>
         <BatchList item={s.item} batches={s.batches} showUsed={false} />
         <div className="row">

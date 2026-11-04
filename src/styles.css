@@ -1028,3 +1028,24 @@ label.inline select {
     padding: 6px 8px;
   }
 }
+
+/* ---------- item highlight line ---------- */
+.item-highlight {
+  display: block;
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--text);
+  margin: 1px 0 0;
+}
+.item-highlight:empty {
+  display: none;
+}
+.highlight {
+  margin: 8px 0 0;
+  font-weight: 600;
+  color: var(--brand);
+}
+.hint {
+  margin: -4px 0 0;
+  font-size: 0.85rem;
+}
