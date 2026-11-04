@@ -206,6 +206,8 @@ export async function importItemsCSV(text: string, existing: Item[]) {
       target_qty: Number.isFinite(target) && target >= 0 ? target : 0,
       location: pick(o.location ?? '', LOCATIONS, 'Kitchen'),
       notes: o.notes ? o.notes : null,
+      ...(o.highlight_en !== undefined ? { highlight_en: o.highlight_en || null } : {}),
+      ...(o.highlight_zh !== undefined ? { highlight_zh: o.highlight_zh || null } : {}),
       ...(Number(o.step_qty) > 0 ? { step_qty: Number(o.step_qty) } : {}),
       ...(PRIORITIES.includes(o.priority as never) ? { priority: o.priority as Item['priority'] } : {}),
       ...(STOCK_RULES.includes(o.stock_rule as never) ? { stock_rule: o.stock_rule as Item['stock_rule'] } : {}),

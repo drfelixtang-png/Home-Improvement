@@ -17,6 +17,8 @@ export interface Item {
   target_qty: number
   location: string
   notes: string | null
+  highlight_en: string | null
+  highlight_zh: string | null
   step_qty: number
   priority: Priority
   stock_rule: StockRule
@@ -92,7 +94,7 @@ export interface ProductLink {
 export type ItemInput = Pick<
   Item,
   'name_en' | 'name_zh' | 'category' | 'unit' | 'target_qty' | 'location' | 'notes'
-> & { sort_order?: number; step_qty?: number; priority?: Priority; stock_rule?: StockRule; kind?: Kind }
+> & { sort_order?: number; step_qty?: number; highlight_en?: string | null; highlight_zh?: string | null; priority?: Priority; stock_rule?: StockRule; kind?: Kind }
 
 export const LOCATIONS = ['Garage', 'Kitchen', 'Freezer'] as const
 export const STORES = ['Superstore', 'Walmart', 'T&T'] as const

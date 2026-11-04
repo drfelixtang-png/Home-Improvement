@@ -1,6 +1,6 @@
 import { useStore } from '../lib/store'
 import { go } from '../lib/router'
-import { itemName, word } from '../lib/i18n'
+import { itemHighlight, itemName, word } from '../lib/i18n'
 import { formatQty } from '../lib/dates'
 import { compareBatches, round, summarise } from '../lib/status'
 import { updateItem } from '../lib/data'
@@ -78,6 +78,7 @@ export function ItemDetail({ id }: { id: string }) {
             <dd>{s.earliestExpiry ? <Expiry date={s.earliestExpiry} /> : '–'}</dd>
           </div>
         </dl>
+        {itemHighlight(lang, item) && <p className="highlight">{itemHighlight(lang, item)}</p>}
         {item.notes && <p className="notes">{item.notes}</p>}
       </div>
 

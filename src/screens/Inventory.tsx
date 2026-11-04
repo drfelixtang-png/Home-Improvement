@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DragEvent, KeyboardEvent } from 'react'
 import { useStore } from '../lib/store'
 import { go } from '../lib/router'
-import { itemName, word } from '../lib/i18n'
+import { itemHighlight, itemName, word } from '../lib/i18n'
 import { daysUntil, formatDate, formatQty } from '../lib/dates'
 import { nextStocktakeDate, redDays } from '../lib/status'
 import type { ItemSummary } from '../lib/status'
@@ -97,7 +97,7 @@ export function Inventory() {
     if (filters.kind && item.kind !== filters.kind) return false
     if (statusFilter && status !== statusFilter) return false
     if (!q) return true
-    return [item.name_en, item.name_zh, item.category, item.notes ?? '', word(lang, item.category)]
+    return [item.name_en, item.name_zh, item.category, item.notes ?? '', item.highlight_en ?? '', item.highlight_zh ?? '', word(lang, item.category)]
       .join(' ')
       .toLowerCase()
       .includes(q)
@@ -372,6 +372,7 @@ function QuickRow({
       <span className="item-no">{index + 1}</span>
       <span className="item-name" role="link" tabIndex={0} onClick={open} onKeyDown={(e: KeyboardEvent) => e.key === 'Enter' && open()}>
         <StatusDot status={s.status} /> {name}
+        {itemHighlight(lang, s.item) && <small className="item-highlight">{itemHighlight(lang, s.item)}</small>}
         {s.item.notes && <small className="muted item-notes">{s.item.notes}</small>}
         <ItemTags item={s.item} />
       </span>
