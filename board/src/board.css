@@ -87,20 +87,19 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .more { margin-top: auto; align-self: flex-start; font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 2px 0; cursor: pointer; }
 .more:hover { text-decoration: underline; }
 
-.c-serenehost { grid-column: span 4; grid-row: span 2; }
-.c-inbox { grid-column: span 4; grid-row: span 2; }
-.c-calendar { grid-column: span 4; }
-.c-waiting { grid-column: span 4; }
-.c-weather { grid-column: span 4; }
-.c-markets { grid-column: span 4; }
-.c-stockpile { grid-column: span 4; }
+/* Row 1: work (SereneHost, WhatsApp, inbox). Row 2: today, waiting, weather.
+   Row 3: markets and stockpile (plus This week on Mondays). Row 4: news. */
+.c-serenehost, .c-whatsapp, .c-inbox, .c-calendar, .c-waiting, .c-weather { grid-column: span 4; }
+.c-markets, .c-stockpile { grid-column: span 6; }
+.grid.has-week .c-markets, .grid.has-week .c-stockpile, .c-week { grid-column: span 4; }
 .c-news { grid-column: span 12; }
 
 @media (max-width: 1100px) {
-  .c-serenehost, .c-inbox, .c-calendar, .c-waiting, .c-weather, .c-markets, .c-stockpile { grid-column: span 6; grid-row: auto; }
+  .grid > .card { grid-column: span 6; }
+  .c-news { grid-column: span 12; }
 }
 @media (max-width: 720px) {
-  .grid > .card { grid-column: 1 / -1; }
+  .grid > .card, .c-news { grid-column: 1 / -1; }
 }
 
 /* ---------- shared rows ---------- */
@@ -207,3 +206,28 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .foot { color: var(--muted); font-size: 0.74rem; padding-top: 4px; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ---------- done / snooze ---------- */
+.rows li, .dl { position: relative; }
+.acts { display: inline-flex; gap: 4px; margin-left: auto; flex: none; opacity: 0.35; transition: opacity 0.15s; }
+li:hover > .acts, li:focus-within > .acts, .mail-top:hover .acts, .acts:focus-within { opacity: 1; }
+@media (hover: none) { .acts { opacity: 1; } }
+.act { font: inherit; font-size: 0.72rem; font-weight: 600; color: var(--muted); background: var(--chip); border: 1px solid var(--line); border-radius: 3px; padding: 0 6px; cursor: pointer; line-height: 1.6; }
+.act:hover { color: var(--accent); border-color: var(--accent); }
+.is-hidden { opacity: 0.45; }
+.is-hidden .x, .is-hidden b { text-decoration: line-through; }
+.hidden-note { align-self: flex-start; font: inherit; font-size: 0.76rem; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; }
+.undo-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 20; display: flex; align-items: center; gap: 14px; background: var(--panel-2); border: 1px solid var(--accent); border-radius: 6px; padding: 8px 10px 8px 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.45); max-width: calc(100vw - 32px); font-size: 0.88rem; }
+.undo-bar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.problem-bar { border-color: var(--crit); color: var(--crit); }
+
+/* ---------- deadlines strip ---------- */
+.deadlines { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; background: var(--panel); border: 1px solid var(--line); padding: 10px 16px; }
+.deadlines .lbl { margin: 0; }
+.deadlines ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.dl { display: flex; align-items: baseline; gap: 8px; background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--muted); padding: 5px 8px 5px 10px; font-size: 0.88rem; min-width: 0; max-width: 100%; }
+.dl b { font-family: var(--mono); font-size: 0.8rem; white-space: nowrap; }
+.dl .sub { display: inline; }
+.dl.urgent { border-left-color: var(--crit); } .dl.urgent b { color: var(--crit); }
+.dl.soon { border-left-color: var(--warn); } .dl.soon b { color: var(--warn); }
+.dl .acts { margin-left: 6px; }

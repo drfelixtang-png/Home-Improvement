@@ -82,8 +82,12 @@ Source is in `board/`; Vite builds it as a second page.
 | Markets, News | The `board-feeds` Supabase Edge Function (`supabase/functions/board-feeds`), Yahoo Finance and RSS feeds |
 | Stockpile | The Stockpile Tracker tables, read directly |
 
-Tables (`supabase/migrations/20261108000000_morning_board.sql`): `board_snapshots` and
-`board_settings` (focus note, bin day, market watchlist), both owner only.
+| WhatsApp | A Claude desktop task on the Windows computer reads the WhatsApp Desktop chat list at about 6:45 am and writes `board_extra` (kind `whatsapp`). Prompt and setup: `board/WHATSAPP_TASK.md`. |
+
+Tables: `board_snapshots`, `board_settings` (focus note, bin day, market watchlist),
+`board_item_state` (items marked done or snoozed) and `board_extra` (blocks from other
+tasks), all owner only. The morning task also writes a 14-day deadlines strip, a
+"This week" card on Mondays, and sends a short phone alert when something is urgent.
 
 Optional: in Supabase, Authentication, URL Configuration, add
 `https://drfelixtang-png.github.io/Home-Improvement/board/` to Redirect URLs so the

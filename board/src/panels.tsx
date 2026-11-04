@@ -5,27 +5,36 @@ import type {
 } from './data'
 import { daysUntil } from './data'
 import { Empty, Sev, Spark } from './ui'
+import { HiddenNote, ItemActions } from './items'
+import { useVisible } from './itemHooks'
+import type { Deadline, WhatsApp } from './data'
 import {
   STOCKPILE_URL, TEAM_TOOLS_URL, aqiText, ago, hourLabel, num, pct, shortDate, weekday, wxText, wxZh,
 } from './format'
 const GMAIL_URL = 'https://mail.google.com/mail/u/0/#inbox'
 const CAL_URL = 'https://calendar.google.com/calendar/u/0/r/day'
 
-function FlagList({ items, limit }: { items: Flag[]; limit?: number }) {
-  const list = limit ? items.slice(0, limit) : items
-  if (!list.length) return <Empty>Nothing needs attention.</Empty>
+function FlagList({ items, limit, scope, actions = true }: { items: Flag[]; limit?: number; scope?: string; actions?: boolean }) {
+  const { visible, hidden } = useVisible(scope ?? 'misc', items)
+  const list = limit ? visible.slice(0, limit) : visible
+  if (!list.length) return <>{hidden ? <Empty>All done for now.</Empty> : <Empty>Nothing needs attention.</Empty>}<HiddenNote n={hidden} /></>
   return (
-    <ul className="rows">
-      {list.map((f, i) => (
-        <li key={i}>
-          <Sev s={f.severity} />
-          <span className="x">
-            {f.url ? <a href={f.url} target="_blank" rel="noreferrer">{f.title}</a> : f.title}
-            {f.detail && !limit && <span className="sub">{f.detail}</span>}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="rows">
+        {list.map((f) => (
+          <li key={f._key} className={f._hidden ? 'is-hidden' : ''}>
+            <Sev s={f.severity} />
+            <span className="x">
+              {f.url ? <a href={f.url} target="_blank" rel="noreferrer">{f.title}</a> : f.title}
+              {f.detail && !limit && <span className="sub">{f.detail}</span>}
+            </span>
+            {actions && scope && <ItemActions k={f._key} title={f.title} hidden={f._hidden} />}
+          </li>
+        ))}
+      </ul>
+      {limit ? more(visible.length, limit) : null}
+      <HiddenNote n={hidden} />
+    </>
   )
 }
 
@@ -52,8 +61,7 @@ export function SereneSummary({ sh }: { sh?: SH }) {
           <div className="stat" key={s.label}><b>{s.value}</b><span>{s.label}</span></div>
         ))}
       </div>
-      <FlagList items={sh.items} limit={6} />
-      {more(sh.items.length, 6)}
+      <FlagList items={sh.items} limit={6} scope="sh" />
       {staleNote(sh)}
     </>
   )
@@ -97,7 +105,7 @@ export function SereneDetail({ sh }: { sh?: SH }) {
       </section>
       <section className="sub-panel span-2">
         <h3>Urgent and important 緊急事項</h3>
-        <FlagList items={sh.items} />
+        <FlagList items={sh.items} scope="sh" />
       </section>
       {day('today')}
       {day('tomorrow')}
@@ -131,35 +139,41 @@ export function SereneDetail({ sh }: { sh?: SH }) {
 type Inbox = NonNullable<Snapshot['inbox']>
 
 export function InboxSummary({ inbox }: { inbox?: Inbox }) {
+  const { visible, hidden } = useVisible('mail', inbox?.items ?? [])
   if (!inbox) return <Empty>Waiting for the first morning summary.</Empty>
   if (!inbox.items.length) return <Empty>Nothing important since yesterday. {inbox.scanned} emails checked.</Empty>
   return (
     <>
       <ul className="rows">
-        {inbox.items.slice(0, 7).map((m, i) => (
-          <li key={i}>
+        {visible.slice(0, 7).map((m) => (
+          <li key={m._key} className={m._hidden ? 'is-hidden' : ''}>
             <Sev s={m.severity} label={m.category} />
-            <span className="x">{m.title}<span className="sub">{m.from}{m.due ? ` · due ${shortDate(m.due)}` : ''}</span></span>
+            <span className="x">{m.url ? <a href={m.url} target="_blank" rel="noreferrer">{m.title}</a> : m.title}<span className="sub">{m.from}{m.due ? ` · due ${shortDate(m.due)}` : ''}</span></span>
+            <ItemActions k={m._key} title={m.title} hidden={m._hidden} />
           </li>
         ))}
       </ul>
-      {more(inbox.items.length, 7)}
+      {!visible.length && <Empty>All done for now.</Empty>}
+      {more(visible.length, 7)}
+      <HiddenNote n={hidden} />
     </>
   )
 }
 
 export function InboxDetail({ inbox }: { inbox?: Inbox }) {
+  const { visible, hidden } = useVisible('mail', inbox?.items ?? [])
   if (!inbox) return <Empty>Waiting for the first morning summary.</Empty>
   return (
     <section className="sub-panel">
       <p className="sub">{inbox.scanned} emails checked since the last summary. Newsletters and promotions are left out.</p>
       <ul className="mail">
-        {inbox.items.map((m, i) => (
-          <li key={i}>
+        {visible.map((m) => (
+          <li key={m._key} className={m._hidden ? 'is-hidden' : ''}>
             <div className="mail-top">
               <Sev s={m.severity} label={m.category} />
               <b>{m.subject}</b>
               {m.due && <span className="due">Due {shortDate(m.due)}</span>}
+              <ItemActions k={m._key} title={m.title} hidden={m._hidden} />
             </div>
             <div className="sub">{m.from}{m.received ? ` · ${shortDate(m.received)}` : ''}</div>
             <p>{m.title}</p>
@@ -168,10 +182,109 @@ export function InboxDetail({ inbox }: { inbox?: Inbox }) {
             {m.url && <a className="link" href={m.url} target="_blank" rel="noreferrer">Open in Gmail</a>}
           </li>
         ))}
-        {!inbox.items.length && <li className="empty">Nothing important.</li>}
+        {!visible.length && <li className="empty">Nothing important.</li>}
       </ul>
+      <HiddenNote n={hidden} />
       <p><a className="link" href={GMAIL_URL} target="_blank" rel="noreferrer">Open Gmail</a></p>
     </section>
+  )
+}
+
+// ================================================================= WhatsApp (desktop task on the Windows computer)
+const WA_URL = 'https://web.whatsapp.com/'
+
+export function WhatsAppSummary({ wa }: { wa: { data: WhatsApp; updated_at: string } | null }) {
+  const { visible, hidden } = useVisible('wa', wa?.data.items ?? [])
+  if (!wa) return <Empty>Not connected yet. The Claude desktop task on your Windows computer will fill this in each morning.</Empty>
+  const d = wa.data
+  return (
+    <>
+      <p className="sub">{d.unread_chats} unread chats · {d.chats_checked} checked · {ago(d.generated_at)}</p>
+      <ul className="rows">
+        {visible.slice(0, 6).map((m) => (
+          <li key={m._key} className={m._hidden ? 'is-hidden' : ''}>
+            <Sev s={m.severity} label={m.category} />
+            <span className="x">{m.title}<span className="sub">{m.chat}{m.received ? ` · ${m.received}` : ''}</span></span>
+            <ItemActions k={m._key} title={m.title} hidden={m._hidden} />
+          </li>
+        ))}
+      </ul>
+      {!visible.length && <Empty>Nothing important in WhatsApp.</Empty>}
+      {more(visible.length, 6)}
+      <HiddenNote n={hidden} />
+      {d.note && <p className="stale">{d.note}</p>}
+    </>
+  )
+}
+
+export function WhatsAppDetail({ wa }: { wa: { data: WhatsApp; updated_at: string } | null }) {
+  const { visible, hidden } = useVisible('wa', wa?.data.items ?? [])
+  if (!wa) return <Empty>Not connected yet. See board/WHATSAPP_TASK.md for how to set up the desktop task.</Empty>
+  const d = wa.data
+  const groups = [...new Set(visible.map((m) => m.category))]
+  return (
+    <div className="detail-grid">
+      <section className="sub-panel span-2">
+        <p className="sub">Read from WhatsApp Desktop {ago(d.generated_at)}: {d.unread_chats} unread chats, {d.chats_checked} chats checked. Only chat previews are read, so nothing is marked as read.</p>
+        {d.note && <p className="stale">{d.note}</p>}
+        <p><a className="link" href={WA_URL} target="_blank" rel="noreferrer">Open WhatsApp Web</a></p>
+      </section>
+      {groups.map((g) => (
+        <section className="sub-panel" key={g}>
+          <h3>{g}</h3>
+          <ul className="mail">
+            {visible.filter((m) => m.category === g).map((m) => (
+              <li key={m._key} className={m._hidden ? 'is-hidden' : ''}>
+                <div className="mail-top"><Sev s={m.severity} /><b>{m.chat}</b>{m.received && <span className="sub">{m.received}</span>}<ItemActions k={m._key} title={m.title} hidden={m._hidden} /></div>
+                <p>{m.title}</p>
+                {m.title_zh && <p className="tc-text sub">{m.title_zh}</p>}
+                {m.detail && <p className="why">{m.detail}</p>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+      {!visible.length && <Empty>Nothing important in WhatsApp.</Empty>}
+      <div className="span-2"><HiddenNote n={hidden} /></div>
+    </div>
+  )
+}
+
+// ================================================================= Deadlines strip
+export function Deadlines({ list, lang }: { list: Deadline[]; lang: 'zh' | 'en' }) {
+  const upcoming = list.filter((d) => { const n = daysUntil(d.date); return n >= -3 && n <= 14 }).sort((a, b) => a.date.localeCompare(b.date))
+  const { visible } = useVisible('due', upcoming)
+  if (!visible.length) return null
+  return (
+    <section className="deadlines" aria-label="Deadlines in the next 14 days">
+      <span className="lbl">{lang === 'zh' ? '十四日內限期' : 'Next 14 days'}</span>
+      <ul>
+        {visible.map((d) => {
+          const n = daysUntil(d.date)
+          const tone = n <= 2 ? 'urgent' : n <= 7 ? 'soon' : 'info'
+          const when = n < 0 ? (lang === 'zh' ? `逾期 ${-n} 日` : `${-n} days late`) : n === 0 ? (lang === 'zh' ? '今日' : 'Today') : n === 1 ? (lang === 'zh' ? '明日' : 'Tomorrow') : (lang === 'zh' ? `${n} 日` : `${n} days`)
+          const title = lang === 'zh' && d.title_zh ? d.title_zh : d.title
+          return (
+            <li key={d._key} className={`dl ${tone}`}>
+              <b>{when}</b>
+              <span className={lang === 'zh' ? 'tc-text' : ''}>{d.url ? <a href={d.url} target="_blank" rel="noreferrer">{title}</a> : title}</span>
+              <span className="sub">{shortDate(d.date)}{d.source ? ` · ${d.source}` : ''}</span>
+              <ItemActions k={d._key} title={d.title} />
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+// ================================================================= Week ahead (Mondays)
+export function WeekAhead({ week, lang }: { week: NonNullable<Snapshot['week_ahead']>; lang: 'zh' | 'en' }) {
+  const pts = lang === 'zh' ? week.points_zh : week.points
+  return (
+    <ul className={`points ${lang === 'zh' ? 'tc-text' : ''}`}>
+      {pts.map((p, i) => <li key={i}>{p}</li>)}
+    </ul>
   )
 }
 
@@ -239,9 +352,8 @@ export function WaitingSummary({ snap, settings }: { snap?: Snapshot; settings: 
   return (
     <>
       {focus && <p className="focus"><span className="lbl">Focus 今日重點</span>{focus}</p>}
-      {bin && <FlagList items={[bin]} limit={1} />}
-      <FlagList items={items} limit={4} />
-      {more(items.length, 4)}
+      {bin && <FlagList items={[bin]} limit={1} actions={false} />}
+      <FlagList items={items} limit={4} scope="wait" />
     </>
   )
 }
@@ -271,7 +383,7 @@ export function WaitingDetail({ snap, settings, onSave }: {
     <div className="detail-grid">
       <section className="sub-panel">
         <h3>Waiting on you 待你回覆</h3>
-        <FlagList items={snap?.waiting ?? []} />
+        <FlagList items={snap?.waiting ?? []} scope="wait" />
       </section>
       <section className="sub-panel">
         <h3>Your notes 備忘</h3>

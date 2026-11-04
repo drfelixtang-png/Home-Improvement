@@ -3,15 +3,17 @@ import type { FormEvent, ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { configMissing, supabase } from '../../src/lib/supabase'
 import {
-  loadMarkets, loadNews, loadSettings, loadSnapshot, loadStockpile, loadWeather, saveSettings,
+  loadExtra, loadMarkets, loadNews, loadSettings, loadSnapshot, loadStockpile, loadWeather, saveSettings,
 } from './data'
-import type { BoardSettings, NewsRegion, Quote, Snapshot, StockpileView, Weather } from './data'
+import type { BoardSettings, NewsRegion, Quote, Snapshot, StockpileView, Weather, WhatsApp } from './data'
+import { ItemStateProvider, UndoBar } from './items'
 import { Card, Loading, Problem } from './ui'
 import { HKG, STOCKPILE_URL, VAN, ago, clock } from './format'
 import {
   CalendarDetail, CalendarSummary, InboxDetail, InboxSummary, MarketsDetail, MarketsSummary,
   NewsDetail, NewsSummary, SereneDetail, SereneSummary, StockDetail, StockSummary,
   WaitingDetail, WaitingSummary, WeatherDetail, WeatherSummary,
+  WhatsAppDetail, WhatsAppSummary, Deadlines, WeekAhead,
 } from './panels'
 
 type Load<T> = { data?: T; error?: string; loading: boolean }
@@ -92,6 +94,7 @@ function Login() {
 // ================================================================= board
 const PANELS: Record<string, { title: string; zh: string }> = {
   serenehost: { title: 'SereneHost', zh: '悠居' },
+  whatsapp: { title: 'WhatsApp', zh: '重要訊息' },
   inbox: { title: 'Important inbox', zh: '重要郵件' },
   calendar: { title: 'Today and tomorrow', zh: '今日 / 明日' },
   waiting: { title: 'Waiting on you', zh: '待你回覆' },
@@ -149,6 +152,7 @@ function Board({ session }: { session: Session }) {
   const [wx, reloadWx] = useLoad<Weather>(loadWeather, [], true)
   const [news, reloadNews] = useLoad<NewsRegion[]>(loadNews, [], true)
   const [sp, reloadSp] = useLoad<StockpileView | null>(loadStockpile, [], true)
+  const [wa, reloadWa] = useLoad(() => loadExtra<WhatsApp>('whatsapp'), [], true)
   const watch = settings?.watchlist ?? []
   const [mk, reloadMk] = useLoad<Quote[]>(() => loadMarkets(watch), [JSON.stringify(watch)], settings !== null)
 
@@ -160,7 +164,7 @@ function Board({ session }: { session: Session }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [route])
 
-  const refreshAll = () => { reloadSnap(); reloadWx(); reloadNews(); reloadSp(); reloadMk() }
+  const refreshAll = () => { reloadSnap(); reloadWx(); reloadNews(); reloadSp(); reloadMk(); reloadWa() }
   const save = async (patch: Partial<BoardSettings>) => {
     await saveSettings(session.user.id, patch)
     setSettings((s) => (s ? { ...s, ...patch } : s))
@@ -174,6 +178,7 @@ function Board({ session }: { session: Session }) {
 
   const summary: Record<string, ReactNode> = {
     serenehost: wrap(snap, () => <SereneSummary sh={s?.serenehost} />),
+    whatsapp: wrap(wa, (d) => <WhatsAppSummary wa={d} />),
     inbox: wrap(snap, () => <InboxSummary inbox={s?.inbox} />),
     calendar: wrap(snap, () => <CalendarSummary cal={s?.calendar} />),
     waiting: wrap(snap, () => <WaitingSummary snap={s} settings={settings} />),
@@ -184,6 +189,7 @@ function Board({ session }: { session: Session }) {
   }
   const detail: Record<string, () => ReactNode> = {
     serenehost: () => wrap(snap, () => <SereneDetail sh={s?.serenehost} />),
+    whatsapp: () => wrap(wa, (d) => <WhatsAppDetail wa={d} />),
     inbox: () => wrap(snap, () => <InboxDetail inbox={s?.inbox} />),
     calendar: () => wrap(snap, () => <CalendarDetail cal={s?.calendar} />),
     waiting: () => wrap(snap, () => <WaitingDetail snap={s} settings={settings} onSave={save} />),
@@ -196,6 +202,7 @@ function Board({ session }: { session: Session }) {
   const meta: Record<string, ReactNode> = {
     serenehost: s?.serenehost ? `${s.serenehost.items.filter((i) => i.severity === 'urgent').length} urgent` : null,
     inbox: s?.inbox ? `${s.inbox.items.length} items` : null,
+    whatsapp: wa.data ? `${wa.data.data.unread_chats} unread` : null,
     markets: mk.data ? 'Live' : null,
     news: news.data ? 'Live' : null,
     weather: wx.data ? 'Live' : null,
@@ -256,6 +263,8 @@ function Board({ session }: { session: Session }) {
         )}
       </section>
 
+      {s?.deadlines?.length ? <Deadlines list={s.deadlines} lang={lang} /> : null}
+
       {panel ? (
         <main className="detail">
           <div className="detail-head">
@@ -270,16 +279,22 @@ function Board({ session }: { session: Session }) {
           {detail[route]()}
         </main>
       ) : (
-        <main className="grid">
-          {Object.entries(PANELS).map(([id, p]) => (
+        <main className={`grid ${s?.week_ahead ? 'has-week' : ''}`}>
+          {Object.entries(PANELS).map(([id, p]) => [
+            id === 'news' && s?.week_ahead ? (
+              <Card key="week" id="week" title="This week" zh="本週">
+                <WeekAhead week={s.week_ahead} lang={lang} />
+              </Card>
+            ) : null,
             <Card key={id} id={id} title={p.title} zh={p.zh} meta={meta[id]} onOpen={() => open(id)}>
               {summary[id]}
-            </Card>
-          ))}
+            </Card>,
+          ])}
         </main>
       )}
+      <UndoBar />
       <footer className="foot">
-        Weather: Open-Meteo · Markets: Yahoo Finance, may be delayed · News: CBC, Global News, RTHK, SCMP, New York Times, BBC · Summary written by Claude from Gmail, Google Calendar and SereneHost.
+        Weather: Open-Meteo · Markets: Yahoo Finance, may be delayed · News: CBC, Global News, RTHK, SCMP, New York Times, BBC · Summary written by Claude from Gmail, Google Calendar, SereneHost and WhatsApp.
       </footer>
     </div>
   )
@@ -295,5 +310,5 @@ export default function App() {
   if (configMissing) return <main className="login"><p className="problem">The Supabase settings are missing from this build.</p></main>
   if (session === undefined) return <main className="login"><Loading /></main>
   if (!session) return <Login />
-  return <Board session={session} />
+  return <ItemStateProvider><Board session={session} /></ItemStateProvider>
 }
