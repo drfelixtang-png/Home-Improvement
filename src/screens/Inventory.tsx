@@ -4,7 +4,7 @@ import { useStore } from '../lib/store'
 import { go } from '../lib/router'
 import { itemHighlight, itemName, word } from '../lib/i18n'
 import { daysUntil, formatDate, formatQty } from '../lib/dates'
-import { nextStocktakeDate, redDays } from '../lib/status'
+import { nextStocktakeDate, redDays, round } from '../lib/status'
 import type { ItemSummary } from '../lib/status'
 import { adjustStock, importStarter, saveOrder, updateItem } from '../lib/data'
 import { KINDS, LOCATIONS, PRIORITIES, STOCK_RULES } from '../lib/types'
@@ -67,6 +67,9 @@ export function Inventory() {
   const [reordering, setReordering] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [removed, setRemoved] = useState<Item | null>(null)
+  // Target editing: null when off; otherwise the typed value for each item id.
+  const [targets, setTargets] = useState<Record<string, string> | null>(null)
+  const [savingTargets, setSavingTargets] = useState(false)
   const [quickAdd, setQuickAdd] = useState<Item | null>(null)
 
   const setFilter = (patch: Partial<typeof filters>) => {
@@ -122,6 +125,36 @@ export function Inventory() {
     list.splice(to, 0, it)
     run(() => saveOrder(list))
   }
+
+  const changedTargets = targets
+    ? activeItems.filter((i) => {
+        const v = targets[i.id]
+        return v !== undefined && v.trim() !== '' && Number(v) >= 0 && round(Number(v)) !== Number(i.target_qty)
+      })
+    : []
+
+  const startTargets = () => setTargets(Object.fromEntries(activeItems.map((i) => [i.id, formatQty(Number(i.target_qty))])))
+  const cancelTargets = () => {
+    if (changedTargets.length && !confirm(t('discardTargets', { n: changedTargets.length }))) return
+    setTargets(null)
+  }
+  const saveTargets = async () => {
+    if (!targets) return
+    setSavingTargets(true)
+    const ok = await run(() =>
+      Promise.all(changedTargets.map((i) => updateItem(i.id, { target_qty: round(Number(targets[i.id])) }))),
+    )
+    setSavingTargets(false)
+    if (ok) setTargets(null)
+  }
+
+  // Warn before leaving the page with unsaved target changes.
+  useEffect(() => {
+    if (!changedTargets.length) return
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [changedTargets.length])
 
   const remove = async (item: Item) => {
     if (await run(() => updateItem(item.id, { archived: true }))) setRemoved(item)
@@ -231,16 +264,27 @@ export function Inventory() {
       )}
 
       <div className="row space-between no-print">
-        {reordering ? <span className="muted">{t('reorderHint')}</span> : <Legend />}
-        <button
-          title={filters.sort !== 'mine' && !reordering ? t('sortReorderHint') : undefined}
-          onClick={() => {
-            if (!reordering && filters.sort !== 'mine') setFilter({ sort: 'mine' })
-            setReordering(!reordering)
-          }}
-        >
-          {reordering ? t('doneReordering') : t('reorder')}
-        </button>
+        {reordering ? (
+          <span className="muted">{t('reorderHint')}</span>
+        ) : targets ? (
+          <span className="muted">{t('editTargetsHint')}</span>
+        ) : (
+          <Legend />
+        )}
+        <span className="row">
+          {!reordering && !targets && <button onClick={startTargets}>{t('editTargets')}</button>}
+          {!targets && (
+            <button
+              title={filters.sort !== 'mine' && !reordering ? t('sortReorderHint') : undefined}
+              onClick={() => {
+                if (!reordering && filters.sort !== 'mine') setFilter({ sort: 'mine' })
+                setReordering(!reordering)
+              }}
+            >
+              {reordering ? t('doneReordering') : t('reorder')}
+            </button>
+          )}
+        </span>
       </div>
 
       {activeItems.length === 0 ? (
@@ -307,7 +351,17 @@ export function Inventory() {
                 </div>
               )
             }
-            return <QuickRow key={s.item.id} s={s} index={index} onRemove={remove} onNeedBatch={setQuickAdd} />
+            return (
+              <QuickRow
+                key={s.item.id}
+                s={s}
+                index={index}
+                onRemove={remove}
+                onNeedBatch={setQuickAdd}
+                targetDraft={targets ? targets[s.item.id] ?? formatQty(Number(s.item.target_qty)) : undefined}
+                onTargetChange={(v) => setTargets((prev) => (prev ? { ...prev, [s.item.id]: v } : prev))}
+              />
+            )
           })}
         </div>
       )}
@@ -315,6 +369,20 @@ export function Inventory() {
       <p className="no-print">
         <a href="#/archived">{t('archivedItems')}</a>
       </p>
+
+      {targets && (
+        <div className="save-bar no-print" role="region" aria-label={t('editTargets')}>
+          <span>{t('targetsChanged', { n: changedTargets.length })}</span>
+          <span className="row">
+            <button onClick={cancelTargets} disabled={savingTargets}>
+              {t('cancel')}
+            </button>
+            <button className="primary" onClick={saveTargets} disabled={savingTargets || changedTargets.length === 0}>
+              {savingTargets ? t('saving') : t('saveTargets')}
+            </button>
+          </span>
+        </div>
+      )}
 
       {quickAdd && (
         <Modal title={t('quickAddTitle', { name: itemName(lang, quickAdd) })} onClose={() => setQuickAdd(null)}>
@@ -344,11 +412,15 @@ function QuickRow({
   index,
   onRemove,
   onNeedBatch,
+  targetDraft,
+  onTargetChange,
 }: {
   s: ItemSummary
   index: number
   onRemove: (item: Item) => void
   onNeedBatch: (item: Item) => void
+  targetDraft?: string
+  onTargetChange?: (value: string) => void
 }) {
   const { t, lang, run } = useStore()
   const [busy, setBusy] = useState(false)
@@ -367,8 +439,17 @@ function QuickRow({
     if (needBatch) onNeedBatch(s.item)
   }
 
+  const editing = targetDraft !== undefined
+  const draftNum = Number(targetDraft)
+  const draftValid = editing && targetDraft!.trim() !== '' && Number.isFinite(draftNum) && draftNum >= 0
+  const changed = draftValid && round(draftNum) !== Number(s.item.target_qty)
+  const bump = (delta: number) => {
+    const base = draftValid ? draftNum : Number(s.item.target_qty)
+    onTargetChange?.(formatQty(round(Math.max(0, base + delta))))
+  }
+
   return (
-    <div className={`item-row status-${s.status} ${busy ? 'busy' : ''}`}>
+    <div className={`item-row status-${s.status} ${busy ? 'busy' : ''} ${editing ? 'target-edit' : ''} ${changed ? 'changed' : ''}`}>
       <span className="item-no">{index + 1}</span>
       <span className="item-name" role="link" tabIndex={0} onClick={open} onKeyDown={(e: KeyboardEvent) => e.key === 'Enter' && open()}>
         <StatusDot status={s.status} /> {name}
@@ -376,6 +457,43 @@ function QuickRow({
         {s.item.notes && <small className="muted item-notes">{s.item.notes}</small>}
         <ItemTags item={s.item} />
       </span>
+      {editing ? (
+        <span className="item-qty stepper target-stepper">
+          <button
+            className="step-btn"
+            aria-label={t('targetMinus', { n: `${formatQty(step)} ${unit}` })}
+            title={t('targetMinus', { n: `${formatQty(step)} ${unit}` })}
+            disabled={draftValid && draftNum <= 0}
+            onClick={() => bump(-step)}
+          >
+            −
+          </button>
+          <label className="target-input">
+            <span className="sr-only">{t('target')}</span>
+            <small className="muted">
+              {t('onHand')} {formatQty(s.onHand)} · {t('target')}
+            </small>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              value={targetDraft}
+              aria-invalid={!draftValid}
+              onChange={(e) => onTargetChange?.(e.target.value)}
+            />
+          </label>
+          <span className="unit-text">{unit}</span>
+          <button
+            className="step-btn"
+            aria-label={t('targetPlus', { n: `${formatQty(step)} ${unit}` })}
+            title={t('targetPlus', { n: `${formatQty(step)} ${unit}` })}
+            onClick={() => bump(step)}
+          >
+            +
+          </button>
+        </span>
+      ) : (
       <span className="item-qty stepper">
         <button
           className="step-btn"
@@ -399,6 +517,7 @@ function QuickRow({
           +
         </button>
       </span>
+      )}
       <span className="item-loc">
         <select
           className="loc-select"
