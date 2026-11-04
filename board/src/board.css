@@ -60,6 +60,16 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .strip { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; align-items: flex-start; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); padding: 12px 16px; }
 .overview { flex: 1 1 520px; min-width: 0; }
 .overview p { margin: 0; font-size: 1.02rem; max-width: 95ch; }
+.overview-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.overview-head .lbl { margin: 0; }
+.lang { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; flex: none; }
+.lang button { font: inherit; font-size: 0.78rem; font-weight: 600; color: var(--muted); background: transparent; border: 0; padding: 3px 10px; cursor: pointer; }
+.lang button.on { background: var(--accent); color: #131a22; }
+.lang button:not(.on):hover { color: var(--fg); }
+.points { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; max-width: 95ch; font-size: 1.02rem; }
+.points li { position: relative; padding-left: 16px; }
+.points li::before { content: ""; position: absolute; left: 2px; top: 0.62em; width: 6px; height: 6px; border-radius: 1px; background: var(--accent); }
+.points.tc-text { font-weight: 500; line-height: 1.6; }
 .lbl { display: block; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
 .lbl em { font-style: normal; text-transform: none; letter-spacing: 0; }
 .sites { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.8rem; color: var(--muted); }

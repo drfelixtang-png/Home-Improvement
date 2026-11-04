@@ -76,9 +76,15 @@ https://drfelixtang-png.github.io/Home-Improvement/ ("Stockpile Tracker").
 ok = status 200 to 399.
 
 ## 6. Overview
-Write `overview`: 3 to 5 plain sentences for Felix to read first thing: the shape of
-today, anything due today or tomorrow, the most important work item, and SereneHost in
-one line. Then `overview_zh`: the same in Traditional Chinese (Hong Kong wording).
+Write the summary in point form, 4 to 6 short points, most important first: anything
+due today or tomorrow, the most important work item, the shape of today, and SereneHost
+in one point. Each point is one line, starts with the key fact, and has no full stop
+at the end.
+- `overview_points_zh`: the points in Traditional Chinese (Hong Kong wording). This is
+  the version Felix reads by default.
+- `overview_points`: the same points in English.
+- `overview` and `overview_zh`: the same content as one short paragraph each (kept for
+  older versions of the board).
 Style: plain English, no em dashes, no contractions, no abbreviations where a word works.
 
 ## 7. Save
@@ -95,6 +101,7 @@ The JSON must match this shape:
 ```json
 {
   "generated_at": "ISO time now",
+  "overview_points_zh": ["…", "…"], "overview_points": ["…", "…"],
   "overview": "…", "overview_zh": "…",
   "calendar": { "today": [CalEvent], "tomorrow": [CalEvent] },
   "serenehost": {
