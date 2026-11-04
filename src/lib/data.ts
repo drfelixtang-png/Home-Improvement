@@ -39,10 +39,19 @@ export async function loadAll() {
   }
 }
 
+// Creates the settings row if it is missing; never overwrites one made by another tab or device.
 export async function createSettings(language: Settings['language']): Promise<Settings> {
-  return check(
-    await supabase.from('settings').upsert({ language }, { onConflict: 'user_id' }).select().single(),
-  ) as Settings
+  check(await supabase.from('settings').upsert({ language }, { onConflict: 'user_id', ignoreDuplicates: true }))
+  return check(await supabase.from('settings').select('*').single()) as Settings
+}
+
+// Marks the starter list as loaded. Returns true for exactly one caller, even when several
+// tabs or devices sign in at the same moment, so the starter list is only loaded once.
+export async function claimSeed(userId: string): Promise<boolean> {
+  const rows = check(
+    await supabase.from('settings').update({ seeded: true }).eq('user_id', userId).eq('seeded', false).select('user_id'),
+  ) as { user_id: string }[]
+  return rows.length === 1
 }
 
 export async function updateSettings(patch: Partial<Omit<Settings, 'user_id'>>, userId: string) {
