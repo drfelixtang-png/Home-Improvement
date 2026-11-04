@@ -1,4 +1,4 @@
-// Starter list: 52 items for 5 people for 1 month. Loaded on first sign-in or from Settings.
+// Starter list: 68 items (52 food and water, 16 emergency supplies) for 5 people for 1 month. Loaded on first sign-in or from Settings.
 export const STARTER_CSV = `sort_order,name_en,name_zh,target_qty,unit,location,category,notes,priority,stock_rule,kind
 1,Hard liquor,烈酒,2,bottle,Kitchen,Drinks,,nice,keep,food
 2,Hard candy,硬糖,1,kg,Kitchen,Snacks,,nice,keep,food
@@ -51,4 +51,20 @@ export const STARTER_CSV = `sort_order,name_en,name_zh,target_qty,unit,location,
 49,Manual can opener,手動開罐器,2,each,Kitchen,Supplies,,essential,keep,emergency
 50,Camping stove and fuel,露營爐及燃料,1,each,Garage,Supplies,Fuel for 30 days; store fuel away from the house door,essential,keep,emergency
 51,Mylar bags and oxygen absorbers,密封袋及脫氧劑,20,pack,Garage,Supplies,,nice,keep,emergency
-52,Food-grade buckets with lids,食品級膠桶,8,each,Garage,Supplies,,nice,keep,emergency`
+52,Food-grade buckets with lids,食品級膠桶,8,each,Garage,Supplies,,nice,keep,emergency
+53,First aid kit,急救包,1,each,Kitchen,Health,Check every 6 months and replace used or expired items,essential,keep,emergency
+54,Prescription medicines,處方藥物,5,pack,Kitchen,Health,One month supply for each person who takes regular medicine; rotate before expiry,essential,no_overstock,emergency
+55,Flashlights or headlamps,電筒／頭燈,5,each,Kitchen,Lighting and power,One per person; headlamps keep hands free,essential,keep,emergency
+56,Batteries (AA and AAA),電池（AA及AAA）,48,each,Kitchen,Lighting and power,Alkaline or lithium keep for about 10 years,essential,stock_up,emergency
+57,Radio (battery or hand-crank),收音機（電池或手搖）,1,each,Kitchen,Lighting and power,For news when phones and internet are down,essential,keep,emergency
+58,Toilet paper,廁紙,40,each,Garage,Hygiene,Rolls,essential,stock_up,emergency
+59,Bleach (unscented),漂白水（無香味）,2,L,Garage,Hygiene,Loses strength after about 1 year; for disinfecting water and surfaces,essential,no_overstock,emergency
+60,Power banks,流動充電器（尿袋）,2,each,Kitchen,Lighting and power,Recharge every 3 months,important,keep,emergency
+61,Fire extinguisher (ABC),滅火筒（ABC）,1,each,Kitchen,Safety,Check the pressure gauge once a year,important,keep,emergency
+62,N95 masks,N95口罩,1,box,Kitchen,Health,For dust after an earthquake and wildfire smoke,important,keep,emergency
+63,Heavy-duty garbage bags,重型垃圾袋,50,each,Garage,Hygiene,For waste and as rain cover,important,stock_up,emergency
+64,"Soap, toothpaste and hand sanitizer",肥皂、牙膏及搓手液,1,pack,Kitchen,Hygiene,"One month for 5 people: about 5 bars of soap, 3 tubes of toothpaste, 1 L of hand sanitizer",important,keep,emergency
+65,Work gloves,工作手套,5,each,Garage,Tools,Pairs; for cleaning up broken glass,important,keep,emergency
+66,Lighters or waterproof matches,打火機／防水火柴,4,each,Kitchen,Tools,For the camping stove,important,keep,emergency
+67,Duct tape and plastic sheeting,強力膠紙及膠布,3,each,Garage,Tools,"2 rolls of duct tape, 1 plastic sheet",important,keep,emergency
+68,Copies of documents in a waterproof bag,證件副本（防水袋）,1,each,Kitchen,Safety,"ID, insurance, medical information and contact list; update once a year",important,keep,emergency`
