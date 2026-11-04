@@ -1,4 +1,4 @@
-// Starter list: 68 items (52 food and water, 16 emergency supplies) for 5 people for 1 month. Loaded on first sign-in or from Settings.
+// Starter list: 77 items (61 food and water, 16 emergency supplies) for 5 people for 1 month. Loaded on first sign-in or from Settings.
 export const STARTER_CSV = `sort_order,name_en,name_zh,target_qty,unit,location,category,notes,priority,stock_rule,kind
 1,Hard liquor,烈酒,2,bottle,Kitchen,Drinks,,nice,keep,food
 2,Hard candy,硬糖,1,kg,Kitchen,Snacks,,nice,keep,food
@@ -47,7 +47,7 @@ export const STARTER_CSV = `sort_order,name_en,name_zh,target_qty,unit,location,
 45,Baking powder,發粉,1,each,Kitchen,Baking,Loses strength after about 1 year,nice,no_overstock,food
 46,Vegetable or canola oil,菜油,3,L,Kitchen,Fats and oils,,important,keep,food
 47,Electrolyte powder,電解質沖劑,30,pack,Kitchen,Health,,important,keep,food
-48,Multivitamins,綜合維他命,150,each,Kitchen,Health,Tablets,important,keep,food
+48,Multivitamins,綜合維他命,2,bottle,Kitchen,Health,About 120 tablets per bottle; 1 tablet per person per day,important,keep,food
 49,Manual can opener,手動開罐器,2,each,Kitchen,Supplies,,essential,keep,emergency
 50,Camping stove and fuel,露營爐及燃料,1,each,Garage,Supplies,Fuel for 30 days; store fuel away from the house door,essential,keep,emergency
 51,Mylar bags and oxygen absorbers,密封袋及脫氧劑,20,pack,Garage,Supplies,,nice,keep,emergency
@@ -67,4 +67,13 @@ export const STARTER_CSV = `sort_order,name_en,name_zh,target_qty,unit,location,
 65,Work gloves,工作手套,5,each,Garage,Tools,Pairs; for cleaning up broken glass,important,keep,emergency
 66,Lighters or waterproof matches,打火機／防水火柴,4,each,Kitchen,Tools,For the camping stove,important,keep,emergency
 67,Duct tape and plastic sheeting,強力膠紙及膠布,3,each,Garage,Tools,"2 rolls of duct tape, 1 plastic sheet",important,keep,emergency
-68,Copies of documents in a waterproof bag,證件副本（防水袋）,1,each,Kitchen,Safety,"ID, insurance, medical information and contact list; update once a year",important,keep,emergency`
+68,Copies of documents in a waterproof bag,證件副本（防水袋）,1,each,Kitchen,Safety,"ID, insurance, medical information and contact list; update once a year",important,keep,emergency
+69,Canned chicken noodle soup,雞湯麵罐頭,20,can,Garage,Soups and ready meals,Condensed soup needs a can of water; ready-to-serve does not,important,stock_up,food
+70,Canned clam chowder,周打蜆湯罐頭,10,can,Garage,Soups and ready meals,Ready to serve,important,keep,food
+71,Canned beef stew,燉牛肉罐頭,15,can,Garage,Soups and ready meals,A full meal that can be eaten cold if needed,important,stock_up,food
+72,Canned chili with beans,辣肉醬豆罐頭,10,can,Garage,Soups and ready meals,Protein and calories in one can,important,keep,food
+73,Canned baked beans,茄汁焗豆罐頭,15,can,Garage,Proteins,Ready to eat,important,stock_up,food
+74,Canned chickpeas,鷹嘴豆罐頭,10,can,Garage,Proteins,Cooked; no soaking or fuel needed,important,stock_up,food
+75,Evaporated milk,淡奶,10,can,Kitchen,Proteins,For tea and cooking; best within about 1 year,nice,no_overstock,food
+76,Canned mixed grain congee,八寶粥罐頭,12,can,Garage,Soups and ready meals,Sweet and ready to eat,nice,keep,food
+77,Preserved mustard tuber (zha cai),榨菜,6,can,Kitchen,Seasonings,Goes with rice and congee,nice,keep,food`
