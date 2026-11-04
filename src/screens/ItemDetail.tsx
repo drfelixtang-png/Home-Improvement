@@ -7,6 +7,7 @@ import { updateItem } from '../lib/data'
 import { BatchList } from '../components/BatchList'
 import { StatusDot } from '../components/StatusDot'
 import { Expiry } from '../components/Expiry'
+import { PriceSection, WhereToBuy } from '../components/Prices'
 
 export function ItemDetail({ id }: { id: string }) {
   const { t, lang, items, batches, settings, run } = useStore()
@@ -55,6 +56,12 @@ export function ItemDetail({ id }: { id: string }) {
             <dd>{word(lang, item.category) || '–'}</dd>
           </div>
           <div>
+            <dt>{t('stepQty')}</dt>
+            <dd>
+              {formatQty(Number(item.step_qty) || 1)} {word(lang, item.unit)}
+            </dd>
+          </div>
+          <div>
             <dt>{t('colExpiry')}</dt>
             <dd>{s.earliestExpiry ? <Expiry date={s.earliestExpiry} /> : '–'}</dd>
           </div>
@@ -64,6 +71,9 @@ export function ItemDetail({ id }: { id: string }) {
 
       <h2>{t('batches')}</h2>
       <BatchList item={item} batches={batches.filter((b) => b.item_id === item.id).sort(compareBatches)} />
+
+      <PriceSection item={item} />
+      <WhereToBuy item={item} />
     </section>
   )
 }

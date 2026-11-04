@@ -1,9 +1,10 @@
 import { supabase } from './supabase'
-import type { Batch, Item, ItemInput, Settings, Stocktake, StocktakeLine } from './types'
+import type { Batch, Item, ItemInput, PriceRecord, ProductLink, Settings, Stocktake, StocktakeLine } from './types'
 import { LOCATIONS, UNITS } from './types'
 import { parseCSV, rowsToObjects } from './csv'
 import { STARTER_CSV } from './seed'
 import { todayISO } from './dates'
+import { compareBatches, round } from './status'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -13,11 +14,13 @@ function check<T>(res: { data: T; error: { message: string } | null }): T {
 // ---------- loading ----------
 
 export async function loadAll() {
-  const [items, batches, settings, stocktakes] = await Promise.all([
+  const [items, batches, settings, stocktakes, prices, links] = await Promise.all([
     supabase.from('items').select('*').order('sort_order').order('created_at'),
     supabase.from('batches').select('*'),
     supabase.from('settings').select('*').maybeSingle(),
     supabase.from('stocktakes').select('*').order('taken_on', { ascending: false }).order('created_at', { ascending: false }),
+    supabase.from('price_records').select('*').order('bought_on', { ascending: false }).order('created_at', { ascending: false }),
+    supabase.from('product_links').select('*').order('sort_order').order('created_at'),
   ])
   const st = check(stocktakes) as Stocktake[]
   const open = st.find((s) => s.status === 'in_progress')
@@ -36,6 +39,8 @@ export async function loadAll() {
     settings: check(settings) as Settings | null,
     stocktakes: st,
     openDone,
+    prices: check(prices) as PriceRecord[],
+    links: check(links) as ProductLink[],
   }
 }
 
@@ -88,6 +93,52 @@ export async function updateBatch(id: string, patch: Partial<Pick<Batch, 'qty' |
 
 export async function deleteBatch(id: string) {
   check(await supabase.from('batches').delete().eq('id', id))
+}
+
+// Quick +/- from the inventory list.
+// Plus adds to the newest batch. Minus takes from the batch expiring soonest (first in, first out);
+// batches that reach zero are deleted. Returns false when plus needs a new batch (none exists).
+export async function adjustStock(itemBatches: Batch[], delta: number): Promise<boolean> {
+  if (delta > 0) {
+    const newest = [...itemBatches].sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+    if (!newest) return false
+    await updateBatch(newest.id, { qty: round(Number(newest.qty) + delta) })
+    return true
+  }
+  let left = -delta
+  for (const b of itemBatches.filter((x) => Number(x.qty) > 0).sort(compareBatches)) {
+    if (left <= 0) break
+    const take = Math.min(left, Number(b.qty))
+    left = round(left - take)
+    const remaining = round(Number(b.qty) - take)
+    if (remaining <= 0) await deleteBatch(b.id)
+    else await updateBatch(b.id, { qty: remaining })
+  }
+  return true
+}
+
+// ---------- prices and products ----------
+
+export async function addPrice(p: { item_id: string; store: string; price: number; qty: number; bought_on: string; note?: string | null }) {
+  check(await supabase.from('price_records').insert(p))
+}
+
+export async function deletePrice(id: string) {
+  check(await supabase.from('price_records').delete().eq('id', id))
+}
+
+export type LinkInput = Omit<ProductLink, 'id' | 'sort_order'> & { sort_order?: number }
+
+export async function addLink(l: LinkInput) {
+  check(await supabase.from('product_links').insert(l))
+}
+
+export async function updateLink(id: string, patch: Partial<LinkInput>) {
+  check(await supabase.from('product_links').update(patch).eq('id', id))
+}
+
+export async function deleteLink(id: string) {
+  check(await supabase.from('product_links').delete().eq('id', id))
 }
 
 // ---------- stock-takes ----------
@@ -155,6 +206,7 @@ export async function importItemsCSV(text: string, existing: Item[]) {
       target_qty: Number.isFinite(target) && target >= 0 ? target : 0,
       location: pick(o.location ?? '', LOCATIONS, 'Kitchen'),
       notes: o.notes ? o.notes : null,
+      ...(Number(o.step_qty) > 0 ? { step_qty: Number(o.step_qty) } : {}),
     }
     const found = byKey.get(keyOf(name_en, name_zh))
     if (found) {

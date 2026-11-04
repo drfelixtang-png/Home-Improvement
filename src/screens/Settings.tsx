@@ -8,7 +8,7 @@ import { todayISO } from '../lib/dates'
 import { summarise } from '../lib/status'
 
 export function SettingsScreen() {
-  const { t, lang, setLang, settings, session, items, batches, stocktakes, run } = useStore()
+  const { t, lang, setLang, settings, session, items, batches, stocktakes, prices, run } = useStore()
   const [interval, setIntervalValue] = useState(String(settings.stocktake_interval_months))
   const [warn, setWarn] = useState(String(settings.expiry_warning_days))
   const [msg, setMsg] = useState<string | null>(null)
@@ -32,11 +32,11 @@ export function SettingsScreen() {
       .sort((a, b) => Number(a.archived) - Number(b.archived) || a.sort_order - b.sort_order)
       .map((i) => {
         const s = summarise(i, batches, settings)
-        return [i.sort_order, i.name_en, i.name_zh, i.target_qty, i.unit, i.location, i.category, i.notes ?? '', s.onHand, s.earliestExpiry ?? '', i.archived ? 'yes' : 'no', i.id]
+        return [i.sort_order, i.name_en, i.name_zh, i.target_qty, i.unit, i.location, i.category, i.notes ?? '', i.step_qty, s.onHand, s.earliestExpiry ?? '', i.archived ? 'yes' : 'no', i.id]
       })
     downloadCSV(
       `stockpile-items-${stamp}.csv`,
-      toCSV(['sort_order', 'name_en', 'name_zh', 'target_qty', 'unit', 'location', 'category', 'notes', 'on_hand', 'earliest_expiry', 'archived', 'id'], rows),
+      toCSV(['sort_order', 'name_en', 'name_zh', 'target_qty', 'unit', 'location', 'category', 'notes', 'step_qty', 'on_hand', 'earliest_expiry', 'archived', 'id'], rows),
     )
   }
 
@@ -49,6 +49,18 @@ export function SettingsScreen() {
     downloadCSV(
       `stockpile-batches-${stamp}.csv`,
       toCSV(['name_en', 'name_zh', 'qty', 'unit', 'expiry_date', 'purchased_on', 'location', 'item_id', 'id'], rows),
+    )
+  }
+
+  const exportPrices = () => {
+    const byId = new Map(items.map((i) => [i.id, i]))
+    const rows = prices.map((p) => {
+      const i = byId.get(p.item_id)
+      return [p.bought_on, i?.name_en ?? '', i?.name_zh ?? '', p.store, p.price, p.qty, i?.unit ?? '', (Number(p.price) / Number(p.qty)).toFixed(4), p.note ?? '']
+    })
+    downloadCSV(
+      `stockpile-prices-${stamp}.csv`,
+      toCSV(['bought_on', 'name_en', 'name_zh', 'store', 'price', 'qty', 'unit', 'unit_price', 'note'], rows),
     )
   }
 
@@ -140,6 +152,7 @@ export function SettingsScreen() {
           <button onClick={exportItems}>{t('exportItems')}</button>
           <button onClick={exportBatches}>{t('exportBatches')}</button>
           <button onClick={exportStocktakes}>{t('exportStocktakes')}</button>
+          <button onClick={exportPrices}>{t('exportPrices')}</button>
         </div>
         <label className="file-label">
           <span>{t('importItems')}</span>

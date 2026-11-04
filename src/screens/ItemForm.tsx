@@ -17,6 +17,7 @@ export function ItemForm({ id }: { id?: string }) {
     target_qty: existing ? String(existing.target_qty) : '',
     location: existing?.location ?? 'Kitchen',
     notes: existing?.notes ?? '',
+    step_qty: existing ? String(existing.step_qty ?? 1) : '1',
   })
   const [err, setErr] = useState<string | null>(null)
   const categories = useMemo(() => [...new Set(items.map((i) => i.category).filter(Boolean))].sort(), [items])
@@ -37,6 +38,7 @@ export function ItemForm({ id }: { id?: string }) {
       target_qty: Number.isFinite(target) && target >= 0 ? target : 0,
       location: f.location,
       notes: f.notes.trim() || null,
+      step_qty: Number(f.step_qty) > 0 ? Number(f.step_qty) : 1,
     }
     let newId = id
     const ok = await run(async () => {
@@ -101,6 +103,13 @@ export function ItemForm({ id }: { id?: string }) {
               </option>
             ))}
           </select>
+        </label>
+        <label className="span-2">
+          <span>
+            {t('stepQty')} ({word(lang, f.unit)})
+          </span>
+          <input type="number" inputMode="decimal" min="0" step="any" required value={f.step_qty} onChange={set('step_qty')} />
+          <small className="muted">{t('stepHint')}</small>
         </label>
         <label className="span-2">
           <span>

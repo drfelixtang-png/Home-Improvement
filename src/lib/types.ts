@@ -11,6 +11,7 @@ export interface Item {
   target_qty: number
   location: string
   notes: string | null
+  step_qty: number
   archived: boolean
   created_at: string
   updated_at: string
@@ -54,10 +55,36 @@ export interface Settings {
   seeded: boolean
 }
 
+export interface PriceRecord {
+  id: string
+  item_id: string
+  store: string
+  price: number
+  qty: number
+  bought_on: string
+  note: string | null
+  created_at: string
+}
+
+export interface ProductLink {
+  id: string
+  item_id: string
+  store: string
+  product_name: string
+  size: string | null
+  pack_qty: number | null
+  price: number | null
+  url: string | null
+  checked_on: string | null
+  notes: string | null
+  sort_order: number
+}
+
 export type ItemInput = Pick<
   Item,
   'name_en' | 'name_zh' | 'category' | 'unit' | 'target_qty' | 'location' | 'notes'
-> & { sort_order?: number }
+> & { sort_order?: number; step_qty?: number }
 
 export const LOCATIONS = ['Garage', 'Kitchen', 'Freezer'] as const
+export const STORES = ['Superstore', 'Walmart', 'T&T'] as const
 export const UNITS = ['kg', 'L', 'can', 'jar', 'box', 'bag', 'bottle', 'pack', 'each'] as const

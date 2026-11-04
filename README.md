@@ -52,5 +52,13 @@ from Settings ("Import starter list"); this only adds items that are missing.
 - **Stock-take:** progress is saved in the database as each item is confirmed, so it can
   be paused on the phone and finished on the computer. Finishing records a snapshot of
   every active item (shown in History) and moves the due date ahead by the interval.
-- **Remove** archives an item (history is kept); restore it from "Archived items".
+- **Quick +/-:** each item has a step (for example 8 kg for one rice bag). Plus adds a step to
+  the newest batch (or opens a quick add form if there is none); minus takes a step from the
+  batch expiring soonest and deletes batches that reach zero.
+- **Prices:** entering a price when adding stock records it with the store. Each item shows its
+  last, lowest and usual price per unit; a price at or below the lowest, or 15% under the usual,
+  is tagged "Good price". The shopping list shows an estimated cost.
+- **Where to buy:** product suggestions per item (Superstore, Walmart, T&T) with size, price,
+  link and the date the price was checked. These are editable on each item page.
+- **Remove** (the x on each row, with Undo) archives an item (history is kept); restore it from "Archived items".
 - **CSV export** uses UTF-8 with BOM so Excel and Numbers show Chinese correctly.
