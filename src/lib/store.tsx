@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import type { Batch, Item, Lang, Settings, Stocktake } from './types'
-import { createSettings, importStarter, loadAll, updateSettings } from './data'
+import { claimSeed, createSettings, importStarter, loadAll, updateSettings } from './data'
 import { translate } from './i18n'
 import type { TKey } from './i18n'
 import { summarise } from './status'
@@ -91,10 +91,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // First sign-in: load the starter list once.
       if (!s.seeded && !seeding.current) {
         seeding.current = true
-        if (data.items.length === 0) await importStarter([])
-        await updateSettings({ seeded: true }, userId)
+        const claimed = await claimSeed(userId)
+        if (claimed && data.items.length === 0) await importStarter([])
         s = { ...s, seeded: true }
         data = await loadAll()
+        // Another tab or device is loading the starter list: wait for it (up to about 6 seconds).
+        for (let i = 0; !claimed && data.items.length === 0 && i < 12; i++) {
+          await new Promise((r) => setTimeout(r, 500))
+          data = await loadAll()
+        }
       }
       setSettings(s)
       setLangState(s.language)
