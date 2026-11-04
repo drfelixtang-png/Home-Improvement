@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
-import type { Batch, Item, Lang, Settings, Stocktake } from './types'
+import type { Batch, Item, Lang, PriceRecord, ProductLink, Settings, Stocktake } from './types'
 import { claimSeed, createSettings, importStarter, loadAll, updateSettings } from './data'
 import { translate } from './i18n'
 import type { TKey } from './i18n'
@@ -40,6 +40,8 @@ interface Store {
   activeItems: Item[]
   batches: Batch[]
   stocktakes: Stocktake[]
+  prices: PriceRecord[]
+  links: ProductLink[]
   openStocktake: Stocktake | null
   openDone: number
   lastDone: string | null
@@ -63,6 +65,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [batches, setBatches] = useState<Batch[]>([])
   const [stocktakes, setStocktakes] = useState<Stocktake[]>([])
   const [openDone, setOpenDone] = useState(0)
+  const [prices, setPrices] = useState<PriceRecord[]>([])
+  const [links, setLinks] = useState<ProductLink[]>([])
   const seeding = useRef(false)
   const inflight = useRef<Promise<void> | null>(null)
   const again = useRef(false)
@@ -112,6 +116,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setBatches(data.batches)
       setStocktakes(data.stocktakes)
       setOpenDone(data.openDone)
+      setPrices(data.prices)
+      setLinks(data.links)
       setError(null)
     } catch (e) {
       setError((e as Error).message)
@@ -212,6 +218,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       activeItems,
       batches,
       stocktakes,
+      prices,
+      links,
       openStocktake,
       openDone,
       lastDone,
@@ -221,7 +229,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       dismissError: () => setError(null),
       run,
     }
-  }, [session, authReady, loading, error, lang, t, setLang, settings, items, batches, stocktakes, openDone, reload, run])
+  }, [session, authReady, loading, error, lang, t, setLang, settings, items, batches, stocktakes, prices, links, openDone, reload, run])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

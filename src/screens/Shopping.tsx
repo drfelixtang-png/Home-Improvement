@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../lib/store'
 import { itemName, word } from '../lib/i18n'
 import { formatDate, formatQty } from '../lib/dates'
-import { locationRank, shoppingLines } from '../lib/status'
+import { locationRank, money, priceStats, shoppingLines } from '../lib/status'
 import type { ShoppingLine } from '../lib/status'
 import { Modal } from '../components/Modal'
 import { AddBatchForm } from '../components/BatchList'
@@ -37,7 +37,7 @@ function readGroup(): 'location' | 'category' {
 }
 
 export function Shopping() {
-  const { t, lang, summaries, summaryById, settings } = useStore()
+  const { t, lang, summaries, summaryById, settings, prices, links } = useStore()
   const [ticks, setTicks] = useState(readTicks)
   const [group, setGroupState] = useState(readGroup)
   const [buying, setBuying] = useState<ShoppingLine | null>(null)
@@ -89,6 +89,31 @@ export function Shopping() {
     return r.join(' · ')
   }
 
+  // Reference price per unit: last price paid, otherwise the cheapest product suggestion.
+  const priceInfo = (l: ShoppingLine) => {
+    const item = l.summary.item
+    const stats = priceStats(prices.filter((p) => p.item_id === item.id))
+    const options = links
+      .filter((k) => k.item_id === item.id && k.price !== null && k.pack_qty)
+      .map((k) => ({ unit: Number(k.price) / Number(k.pack_qty), store: k.store }))
+      .sort((a, b) => a.unit - b.unit)
+    const ref = stats.lastUnit ?? options[0]?.unit ?? null
+    return { stats, cheapest: options[0] ?? null, est: ref !== null && l.buy > 0 ? ref * l.buy : null }
+  }
+  const total = lines.reduce((sum, l) => sum + (ticks[l.summary.item.id] ? 0 : priceInfo(l).est ?? 0), 0)
+
+  const priceText = (l: ShoppingLine) => {
+    const { stats, cheapest, est } = priceInfo(l)
+    const unit = word(lang, l.summary.item.unit)
+    const parts: string[] = []
+    if (est !== null) parts.push('≈ ' + money(est))
+    if (stats.lastUnit !== null) parts.push(`${t('lastPrice')} ${t('perUnit', { price: money(stats.lastUnit), unit })}`)
+    if (stats.lowestUnit !== null && stats.count > 1)
+      parts.push(t('lowestAt', { price: t('perUnit', { price: money(stats.lowestUnit), unit }), store: stats.lowestStore ?? '–' }))
+    else if (stats.lastUnit === null && cheapest) parts.push(`${cheapest.store} ${t('perUnit', { price: money(cheapest.unit), unit })}`)
+    return parts.join(' · ')
+  }
+
   const asText = () => {
     const out: string[] = [t('shoppingTitle')]
     for (const [k, ls] of groups) {
@@ -97,7 +122,8 @@ export function Shopping() {
         const box = ticks[l.summary.item.id] ? '[x]' : '[ ]'
         const qty = l.buy > 0 ? ` ${t('toBuy', { n: `${formatQty(l.buy)} ${word(lang, l.summary.item.unit)}` })}` : ''
         const why = reasons(l)
-        out.push(`${box} ${itemName(lang, l.summary.item)}${qty}${why ? ` (${why})` : ''}`)
+        const pt = priceText(l)
+        out.push(`${box} ${itemName(lang, l.summary.item)}${qty}${why ? ` (${why})` : ''}${pt ? ` ${pt}` : ''}`)
       }
     }
     return out.join('\n')
@@ -144,6 +170,7 @@ export function Shopping() {
       </div>
 
       {lines.length === 0 && <p className="card">{t('nothingToBuy')}</p>}
+      {total > 0 && <p className="est-total">{t('estCost', { total: money(total) })}</p>}
 
       {[...groups].map(([k, ls]) => (
         <div key={k}>
@@ -172,6 +199,7 @@ export function Shopping() {
                         </span>
                       )}
                       <small className="muted">{reasons(l)}</small>
+                      {priceText(l) && <small className="shop-price">{priceText(l)}</small>}
                     </span>
                   </label>
                 </li>

@@ -1,4 +1,4 @@
-import type { Batch, Item, Settings } from './types'
+import type { Batch, Item, PriceRecord, Settings } from './types'
 import { addMonths, daysUntil } from './dates'
 
 export type Status = 'green' | 'yellow' | 'red'
@@ -93,4 +93,47 @@ export const LOCATION_ORDER = ['Garage', 'Kitchen', 'Freezer']
 export function locationRank(loc: string): number {
   const i = LOCATION_ORDER.indexOf(loc)
   return i === -1 ? LOCATION_ORDER.length : i
+}
+
+export interface PriceStats {
+  last: PriceRecord | null
+  lastUnit: number | null
+  lowestUnit: number | null
+  lowestStore: string | null
+  usualUnit: number | null
+  count: number
+}
+
+export function unitPrice(p: { price: number; qty: number }): number {
+  return Number(p.price) / Number(p.qty)
+}
+
+// Last, lowest and usual (median) price per unit for one item. Records must be newest first.
+export function priceStats(records: PriceRecord[]): PriceStats {
+  if (!records.length) return { last: null, lastUnit: null, lowestUnit: null, lowestStore: null, usualUnit: null, count: 0 }
+  const units = records.map(unitPrice)
+  const sorted = [...units].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  const usual = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+  const lowIndex = units.indexOf(sorted[0])
+  return {
+    last: records[0],
+    lastUnit: units[0],
+    lowestUnit: sorted[0],
+    lowestStore: records[lowIndex].store || null,
+    usualUnit: usual,
+    count: records.length,
+  }
+}
+
+// A "good price" is at or below the lowest seen before, or at least 15% under the usual price.
+export function isGoodPrice(unit: number, earlier: PriceRecord[]): boolean {
+  if (!earlier.length) return false
+  const s = priceStats(earlier)
+  return unit <= (s.lowestUnit ?? Infinity) + 1e-9 || unit <= (s.usualUnit ?? Infinity) * 0.85
+}
+
+export function money(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return ''
+  return '$' + n.toFixed(2)
 }

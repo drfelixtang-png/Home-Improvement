@@ -730,3 +730,234 @@ label.inline select {
     border: 0;
   }
 }
+
+/* ---------- quick inventory rows: +/- stepper, location menu, remove ---------- */
+
+.items.quick .item-row {
+  grid-template-columns: 2em minmax(0, 1fr) auto;
+  grid-template-areas:
+    'no name x'
+    'no qty loc'
+    'no exp exp';
+  cursor: default;
+  align-items: center;
+}
+.items.quick .item-name {
+  cursor: pointer;
+  padding: 4px 0;
+}
+.items.quick .item-name:hover {
+  text-decoration: underline;
+}
+.item-x {
+  grid-area: x;
+  justify-self: end;
+}
+.x-btn {
+  min-height: 40px;
+  width: 40px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+.x-btn:hover:not(:disabled) {
+  color: var(--red);
+  border-color: var(--red);
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.step-btn {
+  min-height: 40px;
+  width: 40px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1;
+  flex: none;
+}
+.qty-text {
+  white-space: nowrap;
+}
+.loc-select {
+  width: auto;
+  min-height: 36px;
+  padding: 4px 8px;
+  font-size: 0.9rem;
+}
+.item-row.busy {
+  opacity: 0.6;
+}
+@media (min-width: 760px) {
+  .items.quick .items-head,
+  .items.quick .item-row {
+    grid-template-columns: 3em minmax(0, 2.2fr) 1.7fr 1fr 1.3fr 44px;
+    grid-template-areas: 'no name qty loc exp x';
+  }
+}
+
+.status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.chip {
+  min-height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.chip span {
+  font-weight: 400;
+  color: var(--muted);
+}
+.chip.on {
+  border-width: 2px;
+}
+.chip-red.on {
+  border-color: var(--red);
+  background: var(--red-bg);
+}
+.chip-yellow.on {
+  border-color: var(--yellow);
+  background: var(--yellow-bg);
+}
+.chip-green.on {
+  border-color: var(--green);
+  background: var(--green-bg);
+}
+
+.undo-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 520px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--radius);
+  background: #263028;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 15;
+}
+.undo-bar button {
+  background: transparent;
+  color: #9fdca8;
+  border-color: #9fdca8;
+  font-weight: 700;
+}
+
+@media (min-width: 760px) {
+  .batch-new {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .batch-new .batch-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------- prices and where to buy ---------- */
+
+.price-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+.price-stats div {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+.price-stats dt {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.price-stats dd {
+  margin: 0;
+  font-weight: 700;
+}
+.tag-good {
+  display: inline-block;
+  background: var(--green-bg);
+  color: var(--green);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.record-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.record-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 6px 6px 12px;
+}
+.record-list li > div {
+  min-width: 0;
+}
+.record-list small {
+  display: block;
+}
+.link-store {
+  font-weight: 700;
+  margin-right: 6px;
+}
+.inline-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+.inline-form > * {
+  min-width: 0;
+}
+.inline-form .full {
+  grid-column: 1 / -1;
+}
+@media (min-width: 760px) {
+  .inline-form {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.record-list li.editing {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.shop-price {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.est-total {
+  font-weight: 700;
+}

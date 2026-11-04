@@ -2,7 +2,8 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useStore } from '../lib/store'
 import type { Batch, Item } from '../lib/types'
-import { addBatch, deleteBatch, updateBatch } from '../lib/data'
+import { STORES } from '../lib/types'
+import { addBatch, addPrice, deleteBatch, updateBatch } from '../lib/data'
 import { formatQty, todayISO } from '../lib/dates'
 import { word } from '../lib/i18n'
 import { round } from '../lib/status'
@@ -127,22 +128,51 @@ function BatchRow({ batch, unit, showUsed }: { batch: Batch; unit: string; showU
   )
 }
 
+export function StoreSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { t } = useStore()
+  const known = (STORES as readonly string[]).includes(value) || value === ''
+  return (
+    <label>
+      <span>{t('store')}</span>
+      {known ? (
+        <select value={value} onChange={(e) => onChange(e.target.value === '__other' ? ' ' : e.target.value)}>
+          <option value="">–</option>
+          {STORES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+          <option value="__other">…</option>
+        </select>
+      ) : (
+        <input autoFocus value={value.trimStart()} onChange={(e) => onChange(e.target.value)} />
+      )}
+    </label>
+  )
+}
+
 export function AddBatchForm({ item, onDone, defaultQty }: { item: Item; onDone?: () => void; defaultQty?: number }) {
   const { t, lang, run } = useStore()
   const [qty, setQty] = useState(defaultQty ? formatQty(defaultQty) : '')
   const [expiry, setExpiry] = useState('')
   const [purchased, setPurchased] = useState(todayISO())
+  const [price, setPrice] = useState('')
+  const [store, setStore] = useState('')
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     const n = toNumber(qty)
     if (n === null) return
-    const ok = await run(() =>
-      addBatch({ item_id: item.id, qty: n, expiry_date: expiry || null, purchased_on: purchased || null }),
-    )
+    const p = toNumber(price)
+    const ok = await run(async () => {
+      await addBatch({ item_id: item.id, qty: n, expiry_date: expiry || null, purchased_on: purchased || null })
+      if (p !== null && n > 0)
+        await addPrice({ item_id: item.id, store: store.trim(), price: p, qty: n, bought_on: purchased || todayISO() })
+    })
     if (ok) {
       setQty('')
       setExpiry('')
+      setPrice('')
       onDone?.()
     }
   }
@@ -173,6 +203,11 @@ export function AddBatchForm({ item, onDone, defaultQty }: { item: Item; onDone?
         <span>{t('purchased')}</span>
         <input type="date" value={purchased} onChange={(e) => setPurchased(e.target.value)} />
       </label>
+      <label>
+        <span>{t('pricePaid')}</span>
+        <input type="number" inputMode="decimal" min="0" step="0.01" placeholder="$" value={price} onChange={(e) => setPrice(e.target.value)} />
+      </label>
+      <StoreSelect value={store} onChange={setStore} />
       <div className="batch-actions">
         <button type="submit" className="primary">
           {t('addBatch')}
