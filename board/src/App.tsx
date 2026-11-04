@@ -108,8 +108,41 @@ function greeting(now: Date): [string, string] {
   return ['Good evening, Felix', '晚安']
 }
 
+// ================================================================= summary language
+type Lang = 'zh' | 'en'
+const LANG_KEY = 'morning-board-summary-lang'
+
+function useLang(): [Lang, (l: Lang) => void] {
+  const [lang, setLangState] = useState<Lang>(() => {
+    try { return localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'zh' } catch { return 'zh' }
+  })
+  const setLang = (l: Lang) => {
+    setLangState(l)
+    try { localStorage.setItem(LANG_KEY, l) } catch { /* private window: keep it for this visit only */ }
+  }
+  return [lang, setLang]
+}
+
+// Point form from the snapshot; older snapshots only have a paragraph, so split it into sentences.
+function summaryPoints(s: Snapshot, lang: Lang): string[] {
+  const points = lang === 'zh' ? s.overview_points_zh : s.overview_points
+  if (points?.length) return points
+  const text = (lang === 'zh' ? s.overview_zh : s.overview) || s.overview || ''
+  const parts = lang === 'zh' ? text.split(/(?<=。)/) : text.split(/(?<=\.)\s+(?=[A-Z])/)
+  return parts.map((p) => p.trim()).filter(Boolean)
+}
+
+function agoZh(iso: string, now: Date): string {
+  const mins = Math.round((now.getTime() - new Date(iso).getTime()) / 60000)
+  if (mins < 60) return `${Math.max(1, mins)} 分鐘前寫成`
+  const h = Math.round(mins / 60)
+  if (h < 36) return `${h} 小時前寫成`
+  return `${Math.round(h / 24)} 日前寫成`
+}
+
 function Board({ session }: { session: Session }) {
   const route = useRoute()
+  const [lang, setLang] = useLang()
   const now = useNow(30000)
   const [settings, setSettings] = useState<BoardSettings | null>(null)
   const [snap, reloadSnap] = useLoad(loadSnapshot, [], true)
@@ -195,11 +228,22 @@ function Board({ session }: { session: Session }) {
 
       <section className="strip">
         <div className="overview">
-          <span className="lbl">Overnight summary 隔夜摘要 {snap.data && <em>· written {ago(snap.data.data.generated_at ?? snap.data.created_at, now)}</em>}</span>
+          <div className="overview-head">
+            <span className="lbl">
+              {lang === 'zh' ? '隔夜摘要' : 'Overnight summary'}
+              {snap.data && <em> · {lang === 'zh' ? agoZh(snap.data.data.generated_at ?? snap.data.created_at, now) : `written ${ago(snap.data.data.generated_at ?? snap.data.created_at, now)}`}</em>}
+            </span>
+            <div className="lang" role="group" aria-label="Summary language">
+              <button type="button" aria-pressed={lang === 'zh'} className={lang === 'zh' ? 'on' : ''} onClick={() => setLang('zh')}>中文</button>
+              <button type="button" aria-pressed={lang === 'en'} className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>EN</button>
+            </div>
+          </div>
           {snap.error ? <Problem msg={snap.error} /> : snap.loading && !snap.data ? <Loading /> : s ? (
-            <p>{s.overview}{s.overview_zh && <span className="tc block">{s.overview_zh}</span>}</p>
-          ) : <p className="empty">The first morning summary has not been written yet. It is written every day at about 7:15 am.</p>}
-          {snapAge !== null && snapAge > 20 && <p className="stale">This summary is more than 20 hours old. Today's summary may not have run.</p>}
+            <ul className={`points ${lang === 'zh' ? 'tc-text' : ''}`}>
+              {summaryPoints(s, lang).map((p, i) => <li key={i}>{p}</li>)}
+            </ul>
+          ) : <p className="empty">{lang === 'zh' ? '今日摘要尚未寫好，每日約早上 7:10 更新。' : 'The first morning summary has not been written yet. It is written every day at about 7:10 am.'}</p>}
+          {snapAge !== null && snapAge > 20 && <p className="stale">{lang === 'zh' ? '這份摘要已超過 20 小時，今日的摘要可能未有執行。' : 'This summary is more than 20 hours old. The summary for today may not have run.'}</p>}
         </div>
         {s?.sites && (
           <ul className="sites" aria-label="Website status">

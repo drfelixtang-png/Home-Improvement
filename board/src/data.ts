@@ -62,6 +62,8 @@ export interface Snapshot {
   generated_at: string
   overview: string
   overview_zh?: string | null
+  overview_points?: string[] // point form, English
+  overview_points_zh?: string[] // point form, Traditional Chinese (shown by default)
   calendar?: { today: CalEvent[]; tomorrow: CalEvent[] }
   serenehost?: {
     data_as_of: string | null
