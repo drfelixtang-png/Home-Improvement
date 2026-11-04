@@ -7,7 +7,7 @@ import { daysUntil, formatDate, formatQty } from '../lib/dates'
 import { nextStocktakeDate, redDays } from '../lib/status'
 import type { ItemSummary } from '../lib/status'
 import { adjustStock, importStarter, saveOrder, updateItem } from '../lib/data'
-import { LOCATIONS } from '../lib/types'
+import { KINDS, LOCATIONS, PRIORITIES, STOCK_RULES } from '../lib/types'
 import type { Item } from '../lib/types'
 import { StatusDot } from '../components/StatusDot'
 import { Expiry } from '../components/Expiry'
@@ -16,14 +16,26 @@ import { AddBatchForm } from '../components/BatchList'
 
 const FILTER_KEY = 'stockpile.filters'
 
-function loadFilters(): { loc: string; cat: string } {
+type SortKey = 'mine' | 'priority' | 'stock_rule' | 'status' | 'name'
+interface Filters {
+  loc: string
+  cat: string
+  pr: string
+  sr: string
+  kind: string
+  sort: SortKey
+}
+const NO_FILTERS: Filters = { loc: '', cat: '', pr: '', sr: '', kind: '', sort: 'mine' }
+
+function loadFilters(): Filters {
   try {
-    const v = JSON.parse(localStorage.getItem(FILTER_KEY) ?? '{}')
-    return { loc: v.loc ?? '', cat: v.cat ?? '' }
+    return { ...NO_FILTERS, ...JSON.parse(localStorage.getItem(FILTER_KEY) ?? '{}') }
   } catch {
-    return { loc: '', cat: '' }
+    return NO_FILTERS
   }
 }
+
+const STATUS_RANK = { red: 0, yellow: 1, green: 2 }
 
 export function DueBanner() {
   const { t, lang, lastDone, settings, openStocktake, openDone, summaries } = useStore()
@@ -76,10 +88,13 @@ export function Inventory() {
   for (const s of summaries) counts[s.status]++
 
   const q = search.trim().toLowerCase()
-  const shown = summaries.filter(({ item, status }) => {
+  const filtered = summaries.filter(({ item, status }) => {
     if (reordering) return true
     if (filters.loc && item.location !== filters.loc) return false
     if (filters.cat && item.category !== filters.cat) return false
+    if (filters.pr && item.priority !== filters.pr) return false
+    if (filters.sr && item.stock_rule !== filters.sr) return false
+    if (filters.kind && item.kind !== filters.kind) return false
     if (statusFilter && status !== statusFilter) return false
     if (!q) return true
     return [item.name_en, item.name_zh, item.category, item.notes ?? '', word(lang, item.category)]
@@ -87,6 +102,18 @@ export function Inventory() {
       .toLowerCase()
       .includes(q)
   })
+
+  // Sort ties fall back to "My order".
+  const sortKey: SortKey = reordering ? 'mine' : filters.sort
+  const shown = [...filtered].sort((a, b) => {
+    let d = 0
+    if (sortKey === 'priority') d = PRIORITIES.indexOf(a.item.priority) - PRIORITIES.indexOf(b.item.priority)
+    else if (sortKey === 'stock_rule') d = STOCK_RULES.indexOf(a.item.stock_rule) - STOCK_RULES.indexOf(b.item.stock_rule)
+    else if (sortKey === 'status') d = STATUS_RANK[a.status] - STATUS_RANK[b.status]
+    else if (sortKey === 'name') d = itemName(lang, a.item).localeCompare(itemName(lang, b.item), lang === 'zh-Hant' ? 'zh-Hant' : 'en')
+    return d || a.item.sort_order - b.item.sort_order
+  })
+  const anyFilter = !!(filters.loc || filters.cat || filters.pr || filters.sr || filters.kind || statusFilter || q)
 
   const move = (from: number, to: number) => {
     if (to < 0 || to >= activeItems.length || from === to) return
@@ -149,13 +176,71 @@ export function Inventory() {
                 </option>
               ))}
             </select>
+            <select aria-label={t('priority')} value={filters.pr} onChange={(e) => setFilter({ pr: e.target.value })}>
+              <option value="">
+                {t('priority')}: {t('all')}
+              </option>
+              {PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {t(`pr_${p}`)}
+                </option>
+              ))}
+            </select>
+            <select aria-label={t('stockRule')} value={filters.sr} onChange={(e) => setFilter({ sr: e.target.value })}>
+              <option value="">
+                {t('stockRule')}: {t('all')}
+              </option>
+              {STOCK_RULES.map((r) => (
+                <option key={r} value={r}>
+                  {t(`sr_${r}`)}
+                </option>
+              ))}
+            </select>
+            <select aria-label={t('kind')} value={filters.kind} onChange={(e) => setFilter({ kind: e.target.value })}>
+              <option value="">
+                {t('kind')}: {t('all')}
+              </option>
+              {KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {t(`kind_${k}`)}
+                </option>
+              ))}
+            </select>
+            <select aria-label={t('sortBy')} value={filters.sort} onChange={(e) => setFilter({ sort: e.target.value as SortKey })}>
+              {(['mine', 'priority', 'stock_rule', 'status', 'name'] as const).map((k) => (
+                <option key={k} value={k}>
+                  {t('sortBy')}: {t(k === 'mine' ? 'sortMine' : k === 'priority' ? 'sortPriority' : k === 'stock_rule' ? 'sortStockRule' : k === 'status' ? 'sortStatus' : 'sortName')}
+                </option>
+              ))}
+            </select>
           </div>
+          {anyFilter && (
+            <p className="no-print">
+              <button
+                onClick={() => {
+                  setSearch('')
+                  setStatusFilter('')
+                  setFilter({ ...NO_FILTERS, sort: filters.sort })
+                }}
+              >
+                {t('clearFilters')}
+              </button>
+            </p>
+          )}
         </>
       )}
 
       <div className="row space-between no-print">
         {reordering ? <span className="muted">{t('reorderHint')}</span> : <Legend />}
-        <button onClick={() => setReordering(!reordering)}>{reordering ? t('doneReordering') : t('reorder')}</button>
+        <button
+          title={filters.sort !== 'mine' && !reordering ? t('sortReorderHint') : undefined}
+          onClick={() => {
+            if (!reordering && filters.sort !== 'mine') setFilter({ sort: 'mine' })
+            setReordering(!reordering)
+          }}
+        >
+          {reordering ? t('doneReordering') : t('reorder')}
+        </button>
       </div>
 
       {activeItems.length === 0 ? (
@@ -288,6 +373,7 @@ function QuickRow({
       <span className="item-name" role="link" tabIndex={0} onClick={open} onKeyDown={(e: KeyboardEvent) => e.key === 'Enter' && open()}>
         <StatusDot status={s.status} /> {name}
         {s.item.notes && <small className="muted item-notes">{s.item.notes}</small>}
+        <ItemTags item={s.item} />
       </span>
       <span className="item-qty stepper">
         <button
@@ -336,6 +422,17 @@ function QuickRow({
         </button>
       </span>
     </div>
+  )
+}
+
+export function ItemTags({ item }: { item: Item }) {
+  const { t } = useStore()
+  return (
+    <span className="tags">
+      <span className={`tag tag-pr-${item.priority}`}>{t(`pr_${item.priority}`)}</span>
+      <span className={`tag tag-sr-${item.stock_rule}`}>{t(`sr_${item.stock_rule}`)}</span>
+      {item.kind === 'emergency' && <span className="tag tag-kind">{t('kind_emergency')}</span>}
+    </span>
   )
 }
 

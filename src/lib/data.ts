@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type { Batch, Item, ItemInput, PriceRecord, ProductLink, Settings, Stocktake, StocktakeLine } from './types'
-import { LOCATIONS, UNITS } from './types'
+import { KINDS, LOCATIONS, PRIORITIES, STOCK_RULES, UNITS } from './types'
 import { parseCSV, rowsToObjects } from './csv'
 import { STARTER_CSV } from './seed'
 import { todayISO } from './dates'
@@ -207,6 +207,9 @@ export async function importItemsCSV(text: string, existing: Item[]) {
       location: pick(o.location ?? '', LOCATIONS, 'Kitchen'),
       notes: o.notes ? o.notes : null,
       ...(Number(o.step_qty) > 0 ? { step_qty: Number(o.step_qty) } : {}),
+      ...(PRIORITIES.includes(o.priority as never) ? { priority: o.priority as Item['priority'] } : {}),
+      ...(STOCK_RULES.includes(o.stock_rule as never) ? { stock_rule: o.stock_rule as Item['stock_rule'] } : {}),
+      ...(KINDS.includes(o.kind as never) ? { kind: o.kind as Item['kind'] } : {}),
     }
     const found = byKey.get(keyOf(name_en, name_zh))
     if (found) {

@@ -60,5 +60,11 @@ from Settings ("Import starter list"); this only adds items that are missing.
   is tagged "Good price". The shopping list shows an estimated cost.
 - **Where to buy:** product suggestions per item (Superstore, Walmart, T&T) with size, price,
   link and the date the price was checked. These are editable on each item page.
+- **Priority:** Essential (needed to stay alive and healthy), Important (makes meals and health
+  much better), Nice to have (comfort and treats).
+- **Stock-up rule:** Buy extra on sale (keeps for years and used a lot), Keep at target,
+  Do not overstock (loses quality or expires within about a year).
+- **Group:** Food and water, or Emergency supplies. The Inventory can be filtered by all three
+  and sorted by priority, stock-up rule, status or name.
 - **Remove** (the x on each row, with Undo) archives an item (history is kept); restore it from "Archived items".
 - **CSV export** uses UTF-8 with BOM so Excel and Numbers show Chinese correctly.
