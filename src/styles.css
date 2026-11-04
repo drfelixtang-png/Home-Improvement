@@ -1049,3 +1049,77 @@ label.inline select {
   margin: -4px 0 0;
   font-size: 0.85rem;
 }
+
+/* ---------- edit targets mode ---------- */
+.target-stepper {
+  gap: 6px;
+}
+.target-input {
+  gap: 0;
+  align-items: center;
+}
+.target-input small {
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+.target-input input {
+  width: 5.5em;
+  min-height: 40px;
+  padding: 4px 6px;
+  text-align: center;
+  font-weight: 700;
+}
+.target-input input[aria-invalid='true'] {
+  border-color: var(--red);
+}
+.unit-text {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.item-row.changed {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+.item-row.changed .target-input input {
+  border-color: var(--brand);
+  background: var(--green-bg);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.save-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 12;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px -16px -48px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 2px solid var(--brand);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12);
+  font-weight: 600;
+}
+.items.quick .item-row.target-edit {
+  grid-template-areas:
+    'no name name'
+    'no qty qty';
+}
+.item-row.target-edit .item-loc,
+.item-row.target-edit .item-x,
+.item-row.target-edit .item-exp {
+  display: none;
+}
+@media (min-width: 760px) {
+  .items.quick .item-row.target-edit {
+    grid-template-areas: 'no name qty qty qty qty';
+  }
+}
