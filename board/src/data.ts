@@ -10,9 +10,19 @@ import { daysUntil } from '../../src/lib/dates'
 export type Severity = 'urgent' | 'soon' | 'info'
 
 export interface Flag {
+  key?: string | null // stable id (Gmail thread id, session id, flag id) for done / snooze
   severity: Severity
   title: string
   detail?: string | null
+  url?: string | null
+}
+
+export interface Deadline {
+  key?: string | null
+  date: string // YYYY-MM-DD
+  title: string
+  title_zh?: string | null
+  source?: string | null // HKU SPACE, Bill, SereneHost, Journal, Calendar
   url?: string | null
 }
 
@@ -64,6 +74,8 @@ export interface Snapshot {
   overview_zh?: string | null
   overview_points?: string[] // point form, English
   overview_points_zh?: string[] // point form, Traditional Chinese (shown by default)
+  deadlines?: Deadline[] // next 14 days
+  week_ahead?: { points: string[]; points_zh: string[] } | null // Mondays only
   calendar?: { today: CalEvent[]; tomorrow: CalEvent[] }
   serenehost?: {
     data_as_of: string | null
@@ -77,6 +89,53 @@ export interface Snapshot {
   inbox?: { scanned: number; items: InboxItem[] }
   waiting?: Flag[]
   sites?: { name: string; url: string; ok: boolean; status: number | null; ms: number | null }[]
+}
+
+// ------------------------------------------------------------------ done / snooze
+export interface ItemState {
+  item_key: string
+  status: 'done' | 'snoozed'
+  until: string | null
+  title: string
+}
+
+export async function loadItemStates(): Promise<ItemState[]> {
+  const { data, error } = await supabase.from('board_item_state').select('item_key, status, until, title')
+  if (error) throw error
+  return data as ItemState[]
+}
+
+export async function setItemState(row: ItemState): Promise<void> {
+  const { error } = await supabase.from('board_item_state').upsert(row, { onConflict: 'user_id,item_key' })
+  if (error) throw error
+}
+
+export async function clearItemState(key: string): Promise<void> {
+  const { error } = await supabase.from('board_item_state').delete().eq('item_key', key)
+  if (error) throw error
+}
+
+// ------------------------------------------------------------------ WhatsApp (written by the desktop task)
+export interface WaItem extends Flag {
+  key?: string | null
+  chat: string
+  category: string // SereneHost, HKU SPACE, Work, Family, Personal
+  received?: string | null
+  title_zh?: string | null
+}
+
+export interface WhatsApp {
+  generated_at: string
+  chats_checked: number
+  unread_chats: number
+  items: WaItem[]
+  note?: string | null
+}
+
+export async function loadExtra<T>(kind: string): Promise<{ data: T; updated_at: string } | null> {
+  const { data, error } = await supabase.from('board_extra').select('data, updated_at').eq('kind', kind).maybeSingle()
+  if (error) throw error
+  return data as { data: T; updated_at: string } | null
 }
 
 export async function loadSnapshot(): Promise<{ data: Snapshot; created_at: string } | null> {
