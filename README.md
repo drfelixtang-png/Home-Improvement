@@ -68,3 +68,23 @@ from Settings ("Import starter list"); this only adds items that are missing.
   and sorted by priority, stock-up rule, status or name.
 - **Remove** (the x on each row, with Undo) archives an item (history is kept); restore it from "Archived items".
 - **CSV export** uses UTF-8 with BOM so Excel and Numbers show Chinese correctly.
+
+## Morning Board (`/board/`)
+
+A personal morning dashboard that lives in the same build and shares the Stockpile
+Tracker's sign-in: `https://drfelixtang-png.github.io/Home-Improvement/board/`.
+Source is in `board/`; Vite builds it as a second page.
+
+| Panel | Where the data comes from |
+|---|---|
+| Overnight summary, Today and tomorrow, Important inbox, SereneHost, Waiting on you, website status | A scheduled Claude task writes one row to `board_snapshots` every morning at about 7:10 am Vancouver time. The prompt is in `board/MORNING_TASK.md`. |
+| Weather (Richmond, BC) | Open-Meteo, straight from the browser |
+| Markets, News | The `board-feeds` Supabase Edge Function (`supabase/functions/board-feeds`), Yahoo Finance and RSS feeds |
+| Stockpile | The Stockpile Tracker tables, read directly |
+
+Tables (`supabase/migrations/20261108000000_morning_board.sql`): `board_snapshots` and
+`board_settings` (focus note, bin day, market watchlist), both owner only.
+
+Optional: in Supabase, Authentication, URL Configuration, add
+`https://drfelixtang-png.github.io/Home-Improvement/board/` to Redirect URLs so the
+sign-in link can return straight to the board.
