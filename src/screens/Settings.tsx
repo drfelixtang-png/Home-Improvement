@@ -32,11 +32,11 @@ export function SettingsScreen() {
       .sort((a, b) => Number(a.archived) - Number(b.archived) || a.sort_order - b.sort_order)
       .map((i) => {
         const s = summarise(i, batches, settings)
-        return [i.sort_order, i.name_en, i.name_zh, i.target_qty, i.unit, i.location, i.category, i.notes ?? '', i.step_qty, s.onHand, s.earliestExpiry ?? '', i.archived ? 'yes' : 'no', i.id]
+        return [i.sort_order, i.name_en, i.name_zh, i.target_qty, i.unit, i.location, i.category, i.notes ?? '', i.step_qty, i.priority, i.stock_rule, i.kind, s.onHand, s.earliestExpiry ?? '', i.archived ? 'yes' : 'no', i.id]
       })
     downloadCSV(
       `stockpile-items-${stamp}.csv`,
-      toCSV(['sort_order', 'name_en', 'name_zh', 'target_qty', 'unit', 'location', 'category', 'notes', 'step_qty', 'on_hand', 'earliest_expiry', 'archived', 'id'], rows),
+      toCSV(['sort_order', 'name_en', 'name_zh', 'target_qty', 'unit', 'location', 'category', 'notes', 'step_qty', 'priority', 'stock_rule', 'kind', 'on_hand', 'earliest_expiry', 'archived', 'id'], rows),
     )
   }
 

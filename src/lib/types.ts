@@ -1,4 +1,10 @@
 export type Lang = 'en' | 'zh-Hant'
+export type Priority = 'essential' | 'important' | 'nice'
+export type StockRule = 'stock_up' | 'keep' | 'no_overstock'
+export type Kind = 'food' | 'emergency'
+export const PRIORITIES: Priority[] = ['essential', 'important', 'nice']
+export const STOCK_RULES: StockRule[] = ['stock_up', 'keep', 'no_overstock']
+export const KINDS: Kind[] = ['food', 'emergency']
 
 export interface Item {
   id: string
@@ -12,6 +18,9 @@ export interface Item {
   location: string
   notes: string | null
   step_qty: number
+  priority: Priority
+  stock_rule: StockRule
+  kind: Kind
   archived: boolean
   created_at: string
   updated_at: string
@@ -83,7 +92,7 @@ export interface ProductLink {
 export type ItemInput = Pick<
   Item,
   'name_en' | 'name_zh' | 'category' | 'unit' | 'target_qty' | 'location' | 'notes'
-> & { sort_order?: number; step_qty?: number }
+> & { sort_order?: number; step_qty?: number; priority?: Priority; stock_rule?: StockRule; kind?: Kind }
 
 export const LOCATIONS = ['Garage', 'Kitchen', 'Freezer'] as const
 export const STORES = ['Superstore', 'Walmart', 'T&T'] as const

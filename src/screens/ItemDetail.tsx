@@ -56,6 +56,18 @@ export function ItemDetail({ id }: { id: string }) {
             <dd>{word(lang, item.category) || '–'}</dd>
           </div>
           <div>
+            <dt>{t('priority')}</dt>
+            <dd>{t(`pr_${item.priority}`)}</dd>
+          </div>
+          <div>
+            <dt>{t('stockRule')}</dt>
+            <dd>{t(`sr_${item.stock_rule}`)}</dd>
+          </div>
+          <div>
+            <dt>{t('kind')}</dt>
+            <dd>{t(`kind_${item.kind}`)}</dd>
+          </div>
+          <div>
             <dt>{t('stepQty')}</dt>
             <dd>
               {formatQty(Number(item.step_qty) || 1)} {word(lang, item.unit)}

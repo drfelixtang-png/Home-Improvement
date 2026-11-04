@@ -4,7 +4,8 @@ import { useStore } from '../lib/store'
 import { go } from '../lib/router'
 import { addItem, updateItem } from '../lib/data'
 import { itemName, word } from '../lib/i18n'
-import { LOCATIONS, UNITS } from '../lib/types'
+import { KINDS, LOCATIONS, PRIORITIES, STOCK_RULES, UNITS } from '../lib/types'
+import type { Kind, Priority, StockRule } from '../lib/types'
 
 export function ItemForm({ id }: { id?: string }) {
   const { t, lang, items, activeItems, run } = useStore()
@@ -18,6 +19,9 @@ export function ItemForm({ id }: { id?: string }) {
     location: existing?.location ?? 'Kitchen',
     notes: existing?.notes ?? '',
     step_qty: existing ? String(existing.step_qty ?? 1) : '1',
+    priority: existing?.priority ?? 'important',
+    stock_rule: existing?.stock_rule ?? 'keep',
+    kind: existing?.kind ?? 'food',
   })
   const [err, setErr] = useState<string | null>(null)
   const categories = useMemo(() => [...new Set(items.map((i) => i.category).filter(Boolean))].sort(), [items])
@@ -39,6 +43,9 @@ export function ItemForm({ id }: { id?: string }) {
       location: f.location,
       notes: f.notes.trim() || null,
       step_qty: Number(f.step_qty) > 0 ? Number(f.step_qty) : 1,
+      priority: f.priority as Priority,
+      stock_rule: f.stock_rule as StockRule,
+      kind: f.kind as Kind,
     }
     let newId = id
     const ok = await run(async () => {
@@ -100,6 +107,38 @@ export function ItemForm({ id }: { id?: string }) {
             {UNITS.map((u) => (
               <option key={u} value={u}>
                 {lang === 'en' ? u : `${word(lang, u)} (${u})`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>{t('priority')}</span>
+          <select value={f.priority} onChange={set('priority')}>
+            {PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {t(`pr_${p}`)}
+              </option>
+            ))}
+          </select>
+          <small className="muted">{t('priorityHint')}</small>
+        </label>
+        <label>
+          <span>{t('stockRule')}</span>
+          <select value={f.stock_rule} onChange={set('stock_rule')}>
+            {STOCK_RULES.map((r) => (
+              <option key={r} value={r}>
+                {t(`sr_${r}`)}
+              </option>
+            ))}
+          </select>
+          <small className="muted">{t('stockRuleHint')}</small>
+        </label>
+        <label>
+          <span>{t('kind')}</span>
+          <select value={f.kind} onChange={set('kind')}>
+            {KINDS.map((k) => (
+              <option key={k} value={k}>
+                {t(`kind_${k}`)}
               </option>
             ))}
           </select>
