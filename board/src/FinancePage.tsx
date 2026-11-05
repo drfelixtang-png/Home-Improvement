@@ -326,7 +326,7 @@ function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show
   const byOwner = [...new Set([...rows.map((r) => r.a?.owner ?? ''), ...other.map((a) => a.owner)])].map((o) => ({ o, v: rows.filter((r) => r.a?.owner === o).reduce((s, r) => s + r.cad, 0) + other.filter((a) => a.owner === o).reduce((s, a) => s + toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx), 0) })).sort((a, b) => b.v - a.v)
   const M = (v: number) => (show ? money(v) : '••••')
   const stockAccounts = f.accounts.filter((a) => a.active && holdingsOf(f, a.id).length)
-  const MARKET: Record<Cur, string> = { HKD: 'Hong Kong', USD: 'United States', CAD: 'Canada' }
+  const MARKET: Record<Cur, string> = { HKD: 'Hong Kong dollar', USD: 'US dollar', CAD: 'Canadian dollar' }
   return (<>
     <div className="stats wide fin-stats">
       <div className="stat"><b>{M(total)}</b><span>All investments 總投資</span></div>
@@ -337,8 +337,8 @@ function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show
 
     <div className="detail-grid">
       <section className="sub-panel span-2">
-        <h3>By market 市場分佈</h3>
-        <div className="fin-split" aria-label="Investments by market">
+        <h3>By currency 貨幣分佈</h3>
+        <div className="fin-split" aria-label="Investments by currency">
           {byCur.map((x) => <span key={x.c} className={`seg m-${x.c}`} style={{ flex: x.v }} title={`${MARKET[x.c]} ${pctOf(x.v, total)}%`}>{MARKET[x.c]} {pctOf(x.v, total)}%</span>)}
         </div>
         <div className="fin-view" role="group" aria-label="Group holdings">
