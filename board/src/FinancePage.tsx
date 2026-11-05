@@ -7,7 +7,7 @@ import {
   saveBalances, saveFinSettings, saveHolding,
   sumMap, toCad, updateProperty, yearLines,
 } from './finance'
-import { AccountsAnalytics, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
+import { AccountsAnalytics, AssessmentChart, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
 import { RISK_LABEL } from './finAnalytics'
 import type { AccountKind, Cur, Finance, FinAccount, FinHolding, FinProperty, FinTransaction, Fx, TxKind } from './finance'
 
@@ -753,6 +753,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
         </section>
 
         <PropertyAnalytics f={f} fx={fx} show={show} />
+
+        <AssessmentChart f={f} show={show} />
       </div>
       )}
 

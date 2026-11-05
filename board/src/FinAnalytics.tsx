@@ -4,6 +4,7 @@ import { vanDate } from './me'
 import { netWorth } from './finance'
 import type { Finance, Fx } from './finance'
 import * as A from './finAnalytics'
+import { shortAddress } from './finAnalytics'
 import type { Slice } from './finAnalytics'
 
 function money(v: number): string {
@@ -279,6 +280,81 @@ export function HistoryAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: bo
         </tbody>
       </table></div>
       <p className="sub">Average growth compares the first net worth in the old spreadsheet with today, at today&apos;s exchange rate{show ? '' : ''}. Savings rate is what was left after spending, as a share of income. When passive income covers 100% of spending, work becomes optional.</p>
+    </section>
+  )
+}
+
+// ================================================================= property assessment history
+export function AssessmentChart({ f, show }: { f: Finance; show: boolean }) {
+  const [mode, setMode] = useState<'whole' | 'share'>('whole')
+  const props = f.properties.filter((p) => f.history.some((h) => h.measure === 'assessment' && h.category === p.key))
+  const series = props
+    .filter((p) => mode === 'whole' || p.share > 0)
+    .map((p, i) => ({
+      p, cls: `s${i % 10}`, dash: p.status !== 'held',
+      pts: f.history.filter((h) => h.measure === 'assessment' && h.category === p.key)
+        .sort((a, b) => a.as_of.localeCompare(b.as_of))
+        .map((h) => ({ year: Number(h.as_of.slice(0, 4)) + 1, v: mode === 'share' ? h.amount * p.share : h.amount })),
+    }))
+  if (!series.length) return null
+  const years = [...new Set(series.flatMap((s) => s.pts.map((x) => x.year)))].sort()
+  const vals = series.flatMap((s) => s.pts.map((x) => x.v))
+  const lo = Math.min(...vals) * 0.92, hi = Math.max(...vals) * 1.04
+  const W = 720, H = 230, L = show ? 70 : 14, R = 16, T = 12, B = 26
+  const X = (y: number) => L + ((y - years[0]) / Math.max(1, years[years.length - 1] - years[0])) * (W - L - R)
+  const Y = (v: number) => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B)
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((k) => lo + k * (hi - lo))
+  const short = (v: number) => `CA$${(v / 1e6).toFixed(2)}M`
+  return (
+    <section className="sub-panel span-2">
+      <h3>Assessed value by year 歷年評估價值</h3>
+      <div className="fin-view" role="group" aria-label="Value shown">
+        <button type="button" className={mode === 'whole' ? 'on' : ''} aria-pressed={mode === 'whole'} onClick={() => setMode('whole')}>Whole property</button>
+        <button type="button" className={mode === 'share' ? 'on' : ''} aria-pressed={mode === 'share'} onClick={() => setMode('share')}>Your share</button>
+      </div>
+      <svg className="fin-chart assess" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="BC Assessment value of each property by year">
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={W - R} y1={Y(t)} y2={Y(t)} className="grid" />
+            {show && <text x={L - 6} y={Y(t) + 4} textAnchor="end">{short(t)}</text>}
+          </g>
+        ))}
+        {years.map((y) => <text key={y} x={X(y)} y={H - 6} textAnchor="middle">{y}</text>)}
+        {series.map((s) => (
+          <g key={s.p.id}>
+            <path d={s.pts.map((x, i) => `${i ? 'L' : 'M'}${X(x.year).toFixed(1)},${Y(x.v).toFixed(1)}`).join(' ')} className={`aline ${s.cls}`} strokeDasharray={s.dash ? '5 4' : undefined} />
+            {s.pts.map((x) => <circle key={x.year} cx={X(x.year)} cy={Y(x.v)} r="3.5" className={`apt ${s.cls}`}><title>{`${shortAddress(s.p.address)} ${x.year}: ${show ? `CA$${Math.round(x.v).toLocaleString('en-CA')}` : 'hidden'}`}</title></circle>)}
+          </g>
+        ))}
+      </svg>
+      <p className="sub legend">
+        {series.map((s) => <span key={s.p.id} className="leg-item"><span className={`key-line ${s.cls}`} />{shortAddress(s.p.address)}{s.dash ? ' (Thomson, not counted)' : s.p.share < 1 ? ` (${Math.round(s.p.share * 100)}%)` : ''}</span>)}
+      </p>
+      <div className="tbl-wrap"><table className="tbl">
+        <thead><tr><th>Year</th>{series.map((s) => <th key={s.p.id} className="n">{shortAddress(s.p.address)}</th>)}</tr></thead>
+        <tbody>
+          {[...years].reverse().map((y) => (
+            <tr key={y}>
+              <td>{y}</td>
+              {series.map((s) => {
+                const i = s.pts.findIndex((x) => x.year === y)
+                const cur = s.pts[i], prev = i > 0 ? s.pts[i - 1] : null
+                const ch = cur && prev ? (cur.v - prev.v) / prev.v : null
+                return (
+                  <td key={s.p.id} className="n">
+                    {cur ? (show ? `CA$${Math.round(cur.v).toLocaleString('en-CA')}` : '••••') : '-'}
+                    {ch !== null && <span className={`sub ${ch < 0 ? 'dn' : 'up'}`}>{ch >= 0 ? '+' : '−'}{pct(Math.abs(ch), 1)}</span>}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table></div>
+      <p className="sub">BC Assessment values as of 1 July of the year before. Over these five years: {series.map((s) => {
+        const a = s.pts[0], b = s.pts[s.pts.length - 1]
+        return a && b ? `${shortAddress(s.p.address)} ${b.v >= a.v ? '+' : '−'}${pct(Math.abs((b.v - a.v) / a.v), 1)}` : ''
+      }).filter(Boolean).join(', ')}.</p>
     </section>
   )
 }
