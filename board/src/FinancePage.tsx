@@ -12,6 +12,14 @@ import type { AccountKind, Cur, Finance, FinAccount, FinHolding, FinProperty, Fx
 type Lang = 'zh' | 'en'
 
 const SHOW_KEY = 'morning-board-finance-show'
+const FIN_TABS = [
+  { key: 'overview', label: 'Overview', zh: '總覽' },
+  { key: 'investments', label: 'Investments', zh: '投資' },
+  { key: 'accounts', label: 'Accounts', zh: '戶口' },
+  { key: 'cashflow', label: 'Income and spending', zh: '收支' },
+  { key: 'property', label: 'Property', zh: '物業' },
+  { key: 'history', label: 'History', zh: '歷史' },
+]
 const KIND: Record<AccountKind, [string, string]> = {
   cash: ['Cash', '現金'], gic: ['GIC', '定期'], investment: ['Investment', '投資'],
   credit_card: ['Credit card', '信用卡'], loan: ['Loan', '貸款'], other: ['Other', '其他'],
@@ -246,16 +254,23 @@ function HoldingRow({ f, h, fx, show, userId, onDone }: { f: Finance; h: FinHold
   )
 }
 
+function guessCur(symbol: string): Cur {
+  if (/^\d{1,5}$/.test(symbol) || symbol.endsWith('.HK')) return 'HKD'
+  if (symbol.endsWith('.TO') || symbol.endsWith('.V') || symbol.endsWith('.NE')) return 'CAD'
+  return 'USD'
+}
+
 function AddHolding({ a, userId, onDone }: { a: FinAccount; userId: string; onDone: () => void }) {
-  const [v, setV] = useState({ symbol: '', name: '', name_zh: '', shares: '', price: '' })
+  const [v, setV] = useState({ symbol: '', name: '', name_zh: '', shares: '', price: '', currency: '' as Cur | '' })
   const [msg, setMsg] = useState<string | null>(null)
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     let symbol = v.symbol.trim().toUpperCase()
     if (/^\d{1,5}$/.test(symbol)) symbol = `${String(Number(symbol)).padStart(4, '0')}.HK`
+    const currency: Cur = v.currency || guessCur(symbol)
     try {
-      await saveHolding(userId, { account_id: a.id, symbol, name: v.name.trim() || symbol, name_zh: v.name_zh.trim(), shares: Number(v.shares), currency: a.currency, last_price: v.price ? Number(v.price) : null })
-      setMsg(`Saved ${symbol}.`); setV({ symbol: '', name: '', name_zh: '', shares: '', price: '' }); onDone()
+      await saveHolding(userId, { account_id: a.id, symbol, name: v.name.trim() || symbol, name_zh: v.name_zh.trim(), shares: Number(v.shares), currency, last_price: v.price ? Number(v.price) : null })
+      setMsg(`Saved ${symbol}.`); setV({ symbol: '', name: '', name_zh: '', shares: '', price: '', currency: '' }); onDone()
     } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) }
   }
   return (
@@ -265,9 +280,10 @@ function AddHolding({ a, userId, onDone }: { a: FinAccount; userId: string; onDo
         <label>Name<input value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></label>
         <label>Name (中文)<input className="tc-text" value={v.name_zh} onChange={(e) => setV({ ...v, name_zh: e.target.value })} /></label>
         <label>Shares<input required inputMode="decimal" value={v.shares} onChange={(e) => setV({ ...v, shares: e.target.value.replace(/[^0-9.]/g, '') })} /></label>
+        <label>Currency<select value={v.currency} onChange={(e) => setV({ ...v, currency: e.target.value as Cur | '' })}><option value="">From the code ({guessCur(v.symbol.trim().toUpperCase() || 'X')})</option><option>USD</option><option>CAD</option><option>HKD</option></select></label>
         <label>Price now (optional)<input inputMode="decimal" value={v.price} onChange={(e) => setV({ ...v, price: e.target.value.replace(/[^0-9.]/g, '') })} /></label>
         <div className="form-row"><button type="submit" className="btn">Save 儲存</button>{msg && <span className="sub" role="status">{msg}</span>}</div>
-        <p className="sub wide">For a Hong Kong stock, type the number from the app (for example 700); it becomes 0700.HK. Saving a code that is already in the list replaces its share count. Set shares to 0 after selling everything.</p>
+        <p className="sub wide">For a Hong Kong stock, type the number from the app (for example 700); it becomes 0700.HK. A Toronto stock ends in .TO (for example RY.TO); a US stock is the plain symbol (for example PFE). Saving a code that is already in the list replaces its share count. Set shares to 0 after selling everything.</p>
       </form>
     </details>
   )
@@ -275,23 +291,115 @@ function AddHolding({ a, userId, onDone }: { a: FinAccount; userId: string; onDo
 
 function Holdings({ f, a, fx, show, userId, onDone }: { f: Finance; a: FinAccount; fx: Fx; show: boolean; userId: string; onDone: () => void }) {
   const hs = [...holdingsOf(f, a.id)].sort((x, y) => y.shares * holdingPrice(f, y) - x.shares * holdingPrice(f, x))
-  const total = hs.reduce((s, h) => s + h.shares * holdingPrice(f, h), 0)
-  const dayMove = hs.reduce((s, h) => { const q = f.prices[h.symbol]; return s + (q?.change ? q.change * h.shares : 0) }, 0)
+  const total = hs.reduce((s, h) => s + toCad(h.shares * holdingPrice(f, h), h.currency, fx), 0)
+  const dayMove = hs.reduce((s, h) => { const q = f.prices[h.symbol]; return s + (q?.change ? toCad(q.change * h.shares, h.currency, fx) : 0) }, 0)
   return (
     <section className="sub-panel span-2">
-      <h3>Holdings 持股 · {OWNER[a.owner] ?? a.owner}, {a.institution} <span className="sub inline">{hs.length} stocks · {show ? `${orig(total, a.currency)} (${money(toCad(total, a.currency, fx))})` : '••••'}{dayMove ? ` · today ${dayMove >= 0 ? '+' : '−'}${show ? orig(Math.abs(dayMove), a.currency) : `${Math.abs((dayMove / (total - dayMove || 1)) * 100).toFixed(2)}%`}` : ''}</span></h3>
+      <h3>{OWNER[a.owner] ?? a.owner} · {a.institution} {a.name} <span className="sub inline">{hs.length} stocks · {show ? money(total) : '••••'}{dayMove ? ` · today ${dayMove >= 0 ? '+' : '−'}${show ? money(Math.abs(dayMove)) : ''} (${Math.abs((dayMove / (total - dayMove || 1)) * 100).toFixed(2)}%)` : ''}</span></h3>
       <div className="tbl-wrap"><table className="tbl">
         <thead><tr><th>Stock</th><th className="n">Shares</th><th className="n">Price</th><th className="n">Value</th><th /></tr></thead>
         <tbody>{hs.map((h) => <HoldingRow key={h.id} f={f} h={h} fx={fx} show={show} userId={userId} onDone={onDone} />)}</tbody>
       </table></div>
-      <p className="sub">Prices from Yahoo Finance, Hong Kong prices may be delayed. When a live price is missing, the price from when the holding was entered is used.</p>
       <AddHolding a={a} userId={userId} onDone={onDone} />
     </section>
   )
 }
 
+// ================================================================= investments tab
+function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show: boolean; userId: string; onDone: () => void }) {
+  const [view, setView] = useState<'all' | 'account'>('all')
+  const latest = latestBalances(f)
+  const acct = new Map(f.accounts.map((a) => [a.id, a]))
+  const rows = f.holdings.map((h) => {
+    const q = f.prices[h.symbol]
+    const cad = toCad(h.shares * holdingPrice(f, h), h.currency, fx)
+    const move = q?.change ? toCad(q.change * h.shares, h.currency, fx) : 0
+    return { h, a: acct.get(h.account_id), q, cad, move }
+  }).sort((x, y) => y.cad - x.cad)
+  const stocks = rows.reduce((s, r) => s + r.cad, 0)
+  const move = rows.reduce((s, r) => s + r.move, 0)
+  // Investment accounts without a holdings list are valued from the last snapshot.
+  const other = f.accounts.filter((a) => a.active && a.kind === 'investment' && !holdingsOf(f, a.id).length)
+  const otherTotal = other.reduce((s, a) => s + toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx), 0)
+  const total = stocks + otherTotal
+  const byCur = (['HKD', 'USD', 'CAD'] as Cur[]).map((c) => ({ c, v: rows.filter((r) => r.h.currency === c).reduce((s, r) => s + r.cad, 0) + other.filter((a) => a.currency === c).reduce((s, a) => s + toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx), 0) })).filter((x) => x.v > 0)
+  const byOwner = [...new Set([...rows.map((r) => r.a?.owner ?? ''), ...other.map((a) => a.owner)])].map((o) => ({ o, v: rows.filter((r) => r.a?.owner === o).reduce((s, r) => s + r.cad, 0) + other.filter((a) => a.owner === o).reduce((s, a) => s + toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx), 0) })).sort((a, b) => b.v - a.v)
+  const M = (v: number) => (show ? money(v) : '••••')
+  const stockAccounts = f.accounts.filter((a) => a.active && holdingsOf(f, a.id).length)
+  const MARKET: Record<Cur, string> = { HKD: 'Hong Kong', USD: 'United States', CAD: 'Canada' }
+  return (<>
+    <div className="stats wide fin-stats">
+      <div className="stat"><b>{M(total)}</b><span>All investments 總投資</span></div>
+      <div className="stat"><b className={move < 0 ? 'dn' : move > 0 ? 'up' : ''}>{move ? `${move > 0 ? '+' : '−'}${show ? money(Math.abs(move)) : ''} ${Math.abs((move / (stocks - move || 1)) * 100).toFixed(2)}%` : '-'}</b><span>Today, listed stocks</span></div>
+      <div className="stat"><b>{rows.length}</b><span>Stocks in {stockAccounts.length} accounts</span></div>
+      {byOwner.map((x) => <div key={x.o} className="stat"><b>{M(x.v)}</b><span>{OWNER[x.o] ?? x.o}</span></div>)}
+    </div>
+
+    <div className="detail-grid">
+      <section className="sub-panel span-2">
+        <h3>By market 市場分佈</h3>
+        <div className="fin-split" aria-label="Investments by market">
+          {byCur.map((x) => <span key={x.c} className={`seg m-${x.c}`} style={{ flex: x.v }} title={`${MARKET[x.c]} ${pctOf(x.v, total)}%`}>{MARKET[x.c]} {pctOf(x.v, total)}%</span>)}
+        </div>
+        <div className="fin-view" role="group" aria-label="Group holdings">
+          <button type="button" className={view === 'all' ? 'on' : ''} aria-pressed={view === 'all'} onClick={() => setView('all')}>All stocks together</button>
+          <button type="button" className={view === 'account' ? 'on' : ''} aria-pressed={view === 'account'} onClick={() => setView('account')}>By account, to edit</button>
+        </div>
+      </section>
+
+      {view === 'all' ? (
+        <section className="sub-panel span-2">
+          <h3>All stocks 全部持股 <span className="sub inline">largest first</span></h3>
+          <div className="tbl-wrap"><table className="tbl">
+            <thead><tr><th>Stock</th><th>Account</th><th className="n">Shares</th><th className="n">Price</th><th className="n">Today</th><th className="n">Value</th><th className="n">Share</th></tr></thead>
+            <tbody>
+              {rows.map(({ h, a, q, cad }) => (
+                <tr key={h.id}>
+                  <td><a className="q-link" href={`https://finance.yahoo.com/quote/${encodeURIComponent(h.symbol)}/`} target="_blank" rel="noreferrer">{h.name}</a> <span className="tc">{h.name_zh !== h.name ? h.name_zh : ''}</span><span className="sub">{h.symbol}{!q && ' · stored price'}</span></td>
+                  <td>{a ? `${OWNER[a.owner] ?? a.owner}` : ''}<span className="sub">{a?.institution}</span></td>
+                  <td className="n">{h.shares.toLocaleString('en-CA')}</td>
+                  <td className="n">{holdingPrice(f, h).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}<span className="sub">{h.currency}</span></td>
+                  <td className={`n ${(q?.changePct ?? 0) < 0 ? 'dn' : (q?.changePct ?? 0) > 0 ? 'up' : ''}`}>{q?.changePct !== null && q?.changePct !== undefined ? `${q.changePct >= 0 ? '+' : '−'}${Math.abs(q.changePct).toFixed(2)}%` : '-'}</td>
+                  <td className="n">{M(cad)}{show && h.currency !== 'CAD' && <span className="sub">{orig(h.shares * holdingPrice(f, h), h.currency)}</span>}</td>
+                  <td className="n">{pctOf(cad, total)}%</td>
+                </tr>
+              ))}
+              {other.map((a) => (
+                <tr key={a.id} className="muted">
+                  <td>{a.institution} {a.name}<span className="sub">no holdings list yet, value from the last snapshot</span></td>
+                  <td>{OWNER[a.owner] ?? a.owner}</td>
+                  <td className="n">-</td><td className="n">-</td><td className="n">-</td>
+                  <td className="n">{M(toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx))}</td>
+                  <td className="n">{pctOf(toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx), total)}%</td>
+                </tr>
+              ))}
+              <tr className="total"><td colSpan={5}>Total</td><td className="n">{M(total)}</td><td className="n">100%</td></tr>
+            </tbody>
+          </table></div>
+        </section>
+      ) : (<>
+        {stockAccounts.map((a) => <Holdings key={a.id} f={f} a={a} fx={fx} show={show} userId={userId} onDone={onDone} />)}
+        {other.length > 0 && (
+          <section className="sub-panel span-2">
+            <h3>Accounts without a holdings list</h3>
+            <p className="sub">These are valued from the last snapshot. To price them live, send a screenshot of the holdings, or add each stock here.</p>
+            {other.map((a) => (
+              <details key={a.id} className="add-item">
+                <summary>{OWNER[a.owner] ?? a.owner} · {a.institution} {a.name} · {M(toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx))}</summary>
+                <AddHolding a={a} userId={userId} onDone={onDone} />
+              </details>
+            ))}
+          </section>
+        )}
+      </>)}
+      <p className="sub span-2">Prices from Yahoo Finance; Hong Kong and US prices may be delayed. When a live price is missing, the price from when the stock was entered is used. Cash held in a brokerage account is under Accounts, not here.</p>
+    </div>
+  </>)
+}
+
 // ================================================================= page
-export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx: Fx; userId: string; onReload: () => void; lang: Lang }) {
+export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f: Finance; fx: Fx; userId: string; onReload: () => void; lang: Lang; tab: string }) {
+  const tab = FIN_TABS.some((t) => t.key === rawTab) ? rawTab : 'overview'
   const [show, setShowState] = useState(() => { try { return localStorage.getItem(SHOW_KEY) === '1' } catch { return false } })
   const setShow = (v: boolean) => { setShowState(v); try { localStorage.setItem(SHOW_KEY, v ? '1' : '0') } catch { /* this visit only */ } }
   const [snapOpen, setSnapOpen] = useState(false)
@@ -335,8 +443,7 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
 
   const owners = [...new Set(f.accounts.map((a) => a.owner))]
   const latest = latestBalances(f)
-  const amountOf = (a: FinAccount) => accountAmount(f, a.id, latest)
-  const stockAccounts = f.accounts.filter((a) => a.active && holdingsOf(f, a.id).length)
+  const amountOf = (a: FinAccount) => accountAmount(f, a.id, latest, fx)
 
   return (
     <main className="detail fin">
@@ -350,10 +457,19 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
         </div>
         <div className="fin-actions">
           <button type="button" className="btn ghost" aria-pressed={show} onClick={() => setShow(!show)}>{show ? 'Hide amounts 隱藏' : 'Show amounts 顯示'}</button>
-          <button type="button" className="btn" aria-expanded={snapOpen} onClick={() => setSnapOpen(!snapOpen)}>{snapOpen ? 'Close' : 'New snapshot 更新結餘'}</button>
+          <button type="button" className="btn" aria-expanded={snapOpen && tab === 'accounts'} onClick={() => { if (tab !== 'accounts') { setSnapOpen(true); window.location.hash = '#/finance/accounts' } else setSnapOpen(!snapOpen) }}>{snapOpen && tab === 'accounts' ? 'Close' : 'New snapshot 更新結餘'}</button>
         </div>
       </div>
 
+      <nav className="home-tabs fin-tabs" aria-label="Finance sections">
+        {FIN_TABS.map((t) => (
+          <a key={t.key} href={`#/finance${t.key === 'overview' ? '' : '/' + t.key}`} className={tab === t.key ? 'on' : ''} aria-current={tab === t.key ? 'page' : undefined}>
+            {t.label} <span className="tc">{t.zh}</span>
+          </a>
+        ))}
+      </nav>
+
+      {tab === 'overview' && (<>
       <div className="stats wide fin-stats">
         <div className="stat"><b>{M(w.total)}</b><span>Net worth 淨資產</span></div>
         <div className="stat"><b>{M(w.accounts)}</b><span>Bank and investment accounts</span></div>
@@ -361,9 +477,6 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
         <div className="stat"><b>{M(avgIncome)}</b><span>Income a month, last {started.length || 12} months</span></div>
         <div className="stat"><b className={lastMonths < 60 ? 'warn' : ''}>{Number.isFinite(lastMonths) ? `${Math.floor(lastMonths / 12)} y ${Math.round(lastMonths % 12)} m` : 'No gap'}</b><span>Cash and GICs last, at the current gap</span></div>
       </div>
-
-      {snapOpen && <section className="sub-panel"><h3>New snapshot 更新結餘</h3><SnapshotForm f={f} fx={fx} userId={userId} onDone={onReload} /></section>}
-
       <div className="detail-grid">
         <section className="sub-panel">
           <h3>What we own 資產組成</h3>
@@ -402,33 +515,14 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
           <SpendForm f={f} userId={userId} fx={fx} onDone={onReload} />
           <span className="sub">{est?.source}</span>
         </section>
+      </div>
+      </>)}
 
-        <section className="sub-panel span-2">
-          <h3>Income and spending, last 12 months 收入與支出</h3>
-          <div className="tbl-wrap"><table className="tbl">
-            <thead><tr><th>Month</th>{incLines.map((l) => <th key={l} className="n">{l}</th>)}<th className="n">Income</th><th className="n">Spending</th><th className="n">Gap</th></tr></thead>
-            <tbody>
-              {[...months].reverse().map((mo) => {
-                const i = sumMap(inc.get(mo)), recorded = sumMap(exp.get(mo)), s = recorded || spend
-                return (
-                  <tr key={mo}>
-                    <td>{new Date(`${mo}-15`).toLocaleDateString('en-CA', { month: 'short', year: 'numeric' })}</td>
-                    {incLines.map((l) => <td key={l} className="n">{inc.get(mo)?.get(l) ? M(inc.get(mo)!.get(l)!) : '-'}</td>)}
-                    <td className="n">{i ? M(i) : '-'}</td>
-                    <td className="n">{M(s)}{!recorded && <span className="sub">estimate</span>}</td>
-                    <td className={`n ${i - s < 0 ? 'dn' : 'up'}`}>{M(i - s)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table></div>
-          <p className="sub">
-            Shared income from E 41st Ave is spread over the 6 months it covers. Spending shows your estimate until you add real spending for a month.
-            {zh ? ' 每半年的分紅會平均攤分到六個月。' : ''}
-          </p>
-          <details className="add-item"><summary>Add income or spending 加入收支</summary><IeForm f={f} userId={userId} onDone={onReload} /></details>
-        </section>
+      {tab === 'investments' && <Investments f={f} fx={fx} show={show} userId={userId} onDone={onReload} />}
 
+      {tab === 'accounts' && (<>
+      {snapOpen && <section className="sub-panel"><h3>New snapshot 更新結餘</h3><SnapshotForm f={f} fx={fx} userId={userId} onDone={onReload} /></section>}
+      <div className="detail-grid">
         <section className="sub-panel span-2">
           <h3>Accounts 戶口 <span className="sub inline">no account numbers are stored</span></h3>
           <div className="detail-grid">
@@ -459,37 +553,35 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
             })}
           </div>
         </section>
+      </div>
+      </>)}
 
-        {stockAccounts.map((a) => <Holdings key={a.id} f={f} a={a} fx={fx} show={show} userId={userId} onDone={onReload} />)}
-
+      {tab === 'cashflow' && (
+      <div className="detail-grid">
         <section className="sub-panel span-2">
-          <h3>Properties 物業</h3>
+          <h3>Income and spending, last 12 months 收入與支出</h3>
           <div className="tbl-wrap"><table className="tbl">
-            <thead><tr><th>Property</th><th>Status</th><th className="n">Our share</th><th className="n">Value</th><th className="n">Our equity</th><th /></tr></thead>
-            <tbody>{f.properties.map((p) => <PropertyRow key={p.id} p={p} show={show} onDone={onReload} />)}</tbody>
-          </table></div>
-        </section>
-
-        <section className="sub-panel span-2">
-          <h3>Net worth over time 淨資產走勢</h3>
-          <Chart points={history} show={show} />
-          <p className="sub">From the old spreadsheet until August 2024, then today. Figures kept in Hong Kong dollars are converted at today&apos;s rate, so older points move a little with the exchange rate. The drop after 2021 reflects the move from Hong Kong and the change in how property was counted.</p>
-        </section>
-
-        <section className="sub-panel span-2">
-          <h3>Year by year, from the old spreadsheet 歷年概覽</h3>
-          <div className="tbl-wrap"><table className="tbl">
-            <thead><tr><th>Year</th><th className="n">Income</th><th className="n">Passive income</th><th className="n">Spending</th><th className="n">Saved</th><th className="n">Money</th><th className="n">Property</th><th className="n">Debt</th><th className="n">Net worth</th></tr></thead>
+            <thead><tr><th>Month</th>{incLines.map((l) => <th key={l} className="n">{l}</th>)}<th className="n">Income</th><th className="n">Spending</th><th className="n">Gap</th></tr></thead>
             <tbody>
-              {yearly.map(([y, r]) => (
-                <tr key={y}>
-                  <td>{y}</td>
-                  {['income', 'passive_income', 'expenses', 'net', 'monetary', 'real_estate', 'debt', 'net_equity'].map((k) => <td key={k} className="n">{r[k] === undefined ? '-' : M(r[k])}</td>)}
-                </tr>
-              ))}
+              {[...months].reverse().map((mo) => {
+                const i = sumMap(inc.get(mo)), recorded = sumMap(exp.get(mo)), s = recorded || spend
+                return (
+                  <tr key={mo}>
+                    <td>{new Date(`${mo}-15`).toLocaleDateString('en-CA', { month: 'short', year: 'numeric' })}</td>
+                    {incLines.map((l) => <td key={l} className="n">{inc.get(mo)?.get(l) ? M(inc.get(mo)!.get(l)!) : '-'}</td>)}
+                    <td className="n">{i ? M(i) : '-'}</td>
+                    <td className="n">{M(s)}{!recorded && <span className="sub">estimate</span>}</td>
+                    <td className={`n ${i - s < 0 ? 'dn' : 'up'}`}>{M(i - s)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table></div>
-          <p className="sub">Yearly figures were kept in Hong Kong dollars and are shown at today&apos;s rate.</p>
+          <p className="sub">
+            Shared income from E 41st Ave is spread over the 6 months it covers. Spending shows your estimate until you add real spending for a month.
+            {zh ? ' 每半年的分紅會平均攤分到六個月。' : ''}
+          </p>
+          <details className="add-item"><summary>Add income or spending 加入收支</summary><IeForm f={f} userId={userId} onDone={onReload} /></details>
         </section>
 
         <section className="sub-panel span-2">
@@ -516,6 +608,44 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
           </div>
           <p className="sub">Amounts kept in Hong Kong dollars are shown at today&apos;s rate. The spreadsheet tracked spending until December 2023.</p>
         </section>
+      </div>
+      )}
+
+      {tab === 'property' && (
+      <div className="detail-grid">
+        <section className="sub-panel span-2">
+          <h3>Properties 物業</h3>
+          <div className="tbl-wrap"><table className="tbl">
+            <thead><tr><th>Property</th><th>Status</th><th className="n">Our share</th><th className="n">Value</th><th className="n">Our equity</th><th /></tr></thead>
+            <tbody>{f.properties.map((p) => <PropertyRow key={p.id} p={p} show={show} onDone={onReload} />)}</tbody>
+          </table></div>
+        </section>
+      </div>
+      )}
+
+      {tab === 'history' && (
+      <div className="detail-grid">
+        <section className="sub-panel span-2">
+          <h3>Net worth over time 淨資產走勢</h3>
+          <Chart points={history} show={show} />
+          <p className="sub">From the old spreadsheet until August 2024, then today. Figures kept in Hong Kong dollars are converted at today&apos;s rate, so older points move a little with the exchange rate. The drop after 2021 reflects the move from Hong Kong and the change in how property was counted.</p>
+        </section>
+
+        <section className="sub-panel span-2">
+          <h3>Year by year, from the old spreadsheet 歷年概覽</h3>
+          <div className="tbl-wrap"><table className="tbl">
+            <thead><tr><th>Year</th><th className="n">Income</th><th className="n">Passive income</th><th className="n">Spending</th><th className="n">Saved</th><th className="n">Money</th><th className="n">Property</th><th className="n">Debt</th><th className="n">Net worth</th></tr></thead>
+            <tbody>
+              {yearly.map(([y, r]) => (
+                <tr key={y}>
+                  <td>{y}</td>
+                  {['income', 'passive_income', 'expenses', 'net', 'monetary', 'real_estate', 'debt', 'net_equity'].map((k) => <td key={k} className="n">{r[k] === undefined ? '-' : M(r[k])}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+          <p className="sub">Yearly figures were kept in Hong Kong dollars and are shown at today&apos;s rate.</p>
+        </section>
 
         <section className="sub-panel span-2">
           <h3>Old balance sheets 舊資產負債表</h3>
@@ -528,6 +658,7 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
           <p className="sub">Kept as they were in the spreadsheet, for reference. Account numbers were removed.</p>
         </section>
       </div>
+      )}
     </main>
   )
 }

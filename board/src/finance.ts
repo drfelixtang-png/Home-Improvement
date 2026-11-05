@@ -138,11 +138,15 @@ export const holdingPrice = (f: Finance, h: FinHolding) => f.prices[h.symbol]?.p
 export const holdingsOf = (f: Finance, accountId: string) => f.holdings.filter((h) => h.account_id === accountId)
 
 // An account's value in its own currency: its stocks at live prices when it has a holdings list, else its latest balance.
-export function accountAmount(f: Finance, accountId: string, latest: Map<string, FinBalance>): number | null {
+export function accountAmount(f: Finance, accountId: string, latest: Map<string, FinBalance>, fx: Fx): number | null {
   const hs = holdingsOf(f, accountId)
-  if (hs.length) return hs.reduce((s, h) => s + h.shares * holdingPrice(f, h), 0)
+  const cur = f.accounts.find((a) => a.id === accountId)?.currency ?? 'CAD'
+  if (hs.length) return hs.reduce((s, h) => s + convert(h.shares * holdingPrice(f, h), h.currency, cur, fx), 0)
   return latest.get(accountId)?.amount ?? null
 }
+
+export const fromCad = (amount: number, cur: Cur, fx: Fx) => (cur === 'USD' ? amount / fx.usdCad : cur === 'HKD' ? amount * fx.cadHkd : amount)
+export const convert = (amount: number, from: Cur, to: Cur, fx: Fx) => (from === to ? amount : fromCad(toCad(amount, from, fx), to, fx))
 
 export async function saveHolding(userId: string, row: { account_id: string; symbol: string; name: string; name_zh: string; shares: number; currency: Cur; last_price: number | null }): Promise<void> {
   const { error } = await supabase.from('fin_holdings').upsert({ ...row, user_id: userId, updated_at: new Date().toISOString() }, { onConflict: 'account_id,symbol' })
@@ -183,7 +187,7 @@ export function netWorth(f: Finance, fx: Fx): Worth {
   let asOf: string | null = null
   for (const a of f.accounts.filter((x) => x.active)) {
     const b = latest.get(a.id)
-    const amt = accountAmount(f, a.id, latest)
+    const amt = accountAmount(f, a.id, latest, fx)
     if (amt === null) continue
     const v = toCad(amt, a.currency, fx)
     byKind[a.kind] += v
