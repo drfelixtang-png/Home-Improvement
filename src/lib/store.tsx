@@ -6,8 +6,8 @@ import type { Batch, Item, Lang, PriceRecord, ProductLink, Settings, Stocktake }
 import { claimSeed, createSettings, importStarter, loadAll, updateSettings } from './data'
 import { translate } from './i18n'
 import type { TKey } from './i18n'
-import { summarise } from './status'
-import type { ItemSummary } from './status'
+import { areaDue, locationRank, summarise } from './status'
+import type { AreaDue, ItemSummary } from './status'
 
 const LANG_KEY = 'stockpile.lang'
 
@@ -44,7 +44,7 @@ interface Store {
   links: ProductLink[]
   openStocktake: Stocktake | null
   openDone: number
-  lastDone: string | null
+  areas: AreaDue[]
   summaries: ItemSummary[]
   summaryById: Map<string, ItemSummary>
   reload: () => Promise<void>
@@ -204,7 +204,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const summaries = activeItems.map((i) => summarise(i, batches, settings))
     const summaryById = new Map(summaries.map((s) => [s.item.id, s]))
     const openStocktake = stocktakes.find((s) => s.status === 'in_progress') ?? null
-    const lastDone = stocktakes.find((s) => s.status === 'done')?.taken_on ?? null
+    // Locations that hold active items, in walking order.
+    const used = [...new Set(activeItems.map((i) => i.location))].sort((a, b) => locationRank(a) - locationRank(b))
+    const areas = areaDue(stocktakes, used, settings)
     return {
       session,
       authReady,
@@ -222,7 +224,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       links,
       openStocktake,
       openDone,
-      lastDone,
+      areas,
       summaries,
       summaryById,
       reload,

@@ -4,7 +4,7 @@ import { useStore } from '../lib/store'
 import { go } from '../lib/router'
 import { itemHighlight, itemName, word } from '../lib/i18n'
 import { daysUntil, formatDate, formatQty } from '../lib/dates'
-import { nextStocktakeDate, redDays, round } from '../lib/status'
+import { covers, redDays, round } from '../lib/status'
 import type { ItemSummary } from '../lib/status'
 import { adjustStock, importStarter, saveOrder, updateItem } from '../lib/data'
 import { KINDS, LOCATIONS, PRIORITIES, STOCK_RULES } from '../lib/types'
@@ -12,6 +12,7 @@ import type { Item } from '../lib/types'
 import { StatusDot } from '../components/StatusDot'
 import { Expiry } from '../components/Expiry'
 import { Modal } from '../components/Modal'
+import { areaText, stocktakeLabel } from '../lib/areas'
 import { AddBatchForm } from '../components/BatchList'
 
 const FILTER_KEY = 'stockpile.filters'
@@ -38,21 +39,36 @@ function loadFilters(): Filters {
 const STATUS_RANK = { red: 0, yellow: 1, green: 2 }
 
 export function DueBanner() {
-  const { t, lang, lastDone, settings, openStocktake, openDone, summaries } = useStore()
+  const { t, lang, areas, openStocktake, openDone, summaries } = useStore()
   if (openStocktake) {
+    const total = summaries.filter((s) => covers(openStocktake, s.item.location)).length
     return (
       <div className="banner banner-yellow">
-        <span>{t('stocktakeInProgress', { done: Math.min(openDone, summaries.length), total: summaries.length })}</span>
+        <span>
+          {stocktakeLabel(openStocktake, t, lang)}: {t('stocktakeInProgress', { done: Math.min(openDone, total), total })}
+        </span>
         <button onClick={() => go('stocktake')}>{t('continueStocktake')}</button>
       </div>
     )
   }
-  const due = nextStocktakeDate(lastDone, settings)
-  if (!due) return <div className="banner banner-yellow">{t('stocktakeNever')}</div>
-  const overdue = daysUntil(due) < 0
+  if (!areas.length || areas.every((a) => !a.due)) return <div className="banner banner-yellow">{t('stocktakeNever')}</div>
+  // The most urgent area: never counted first, then the soonest due date.
+  const urgent = [...areas].sort((a, b) => (a.due ?? '').localeCompare(b.due ?? ''))[0]
+  const area = word(lang, urgent.location)
+  const days = urgent.due ? daysUntil(urgent.due) : -1
+  const cls = !urgent.due ? 'banner-yellow' : days < 0 ? 'banner-red' : days <= 14 ? 'banner-yellow' : 'banner-green'
   return (
-    <div className={`banner ${overdue ? 'banner-red' : daysUntil(due) <= 14 ? 'banner-yellow' : 'banner-green'}`}>
-      {t(overdue ? 'stocktakeOverdue' : 'stocktakeDue', { date: formatDate(due, lang) })}
+    <div className={`banner banner-areas ${cls}`}>
+      <span>
+        {!urgent.due
+          ? t('stocktakeAreaNever', { area })
+          : t(days < 0 ? 'stocktakeAreaOverdue' : 'stocktakeAreaDue', { area, date: formatDate(urgent.due, lang) })}
+      </span>
+      {areas.length > 1 && (
+        <small className="area-dates">
+          {areas.map((a) => `${word(lang, a.location)}: ${areaText(a, t, lang)}`).join(' · ')}
+        </small>
+      )}
     </div>
   )
 }

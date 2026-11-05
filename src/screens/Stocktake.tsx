@@ -3,11 +3,12 @@ import { useStore } from '../lib/store'
 import { go } from '../lib/router'
 import { itemHighlight, itemName, word } from '../lib/i18n'
 import { formatQty } from '../lib/dates'
-import { locationRank, summarise } from '../lib/status'
+import { covers, locationRank, summarise } from '../lib/status'
 import type { ItemSummary } from '../lib/status'
 import { cancelStocktake, deleteBatch, finishStocktake, loadAll, loadLines, saveLine, startStocktake } from '../lib/data'
 import { BatchList } from '../components/BatchList'
 import { StatusDot } from '../components/StatusDot'
+import { areaText, stocktakeLabel } from '../lib/areas'
 
 const MODE_KEY = 'stockpile.stocktakeMode'
 
@@ -32,7 +33,7 @@ function lineFor(stocktakeId: string, s: ItemSummary) {
 }
 
 export function StocktakeScreen() {
-  const { t, lang, summaries, settings, openStocktake, run, reload } = useStore()
+  const { t, lang, summaries, settings, openStocktake, areas, run, reload } = useStore()
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set())
   const [linesFor, setLinesFor] = useState<string | null>(null)
   const [mode, setModeState] = useState(initialMode)
@@ -49,13 +50,15 @@ export function StocktakeScreen() {
     }
   }
 
-  // Walk the garage, then the kitchen, then the freezer.
+  // Walk the garage, then the kitchen, then the freezer; only the areas this stock-take covers.
   const ordered = useMemo(
     () =>
-      [...summaries].sort(
-        (a, b) => locationRank(a.item.location) - locationRank(b.item.location) || a.item.sort_order - b.item.sort_order,
-      ),
-    [summaries],
+      summaries
+        .filter((s) => !openStocktake || covers(openStocktake, s.item.location))
+        .sort(
+          (a, b) => locationRank(a.item.location) - locationRank(b.item.location) || a.item.sort_order - b.item.sort_order,
+        ),
+    [summaries, openStocktake],
   )
 
   const openId = openStocktake?.id ?? null
@@ -80,13 +83,26 @@ export function StocktakeScreen() {
   }, [openId, refreshLines])
 
   if (!openStocktake) {
+    const count = (loc: string | null) => summaries.filter((s) => !loc || s.item.location === loc).length
     return (
-      <section className="card">
+      <section className="card stack">
         <h1>{t('stocktakeTitle')}</h1>
         <p>{t('stocktakeIntro')}</p>
-        <button className="primary" onClick={() => run(startStocktake)}>
-          {t('startStocktake')}
-        </button>
+        <h2>{t('stocktakeWhat')}</h2>
+        <div className="area-choices">
+          {areas.map((a) => (
+            <button key={a.location} className="area-choice" onClick={() => run(() => startStocktake([a.location]))}>
+              <strong>{t('countArea', { area: word(lang, a.location) })}</strong>
+              <small>
+                {t('areaItems', { n: count(a.location) })} · {areaText(a, t, lang)}
+              </small>
+            </button>
+          ))}
+          <button className="area-choice primary" onClick={() => run(() => startStocktake(null))}>
+            <strong>{t('countEverything')}</strong>
+            <small>{t('areaItems', { n: count(null) })}</small>
+          </button>
+        </div>
       </section>
     )
   }
@@ -122,7 +138,7 @@ export function StocktakeScreen() {
       const ok = await run(async () => {
         const fresh = await loadAll()
         const lines = fresh.items
-          .filter((i) => !i.archived)
+          .filter((i) => !i.archived && covers(openStocktake, i.location))
           .map((i) => lineFor(openStocktake.id, summarise(i, fresh.batches, settings)))
         await finishStocktake(openStocktake.id, lines, notes)
       })
@@ -170,7 +186,7 @@ export function StocktakeScreen() {
   return (
     <section>
       <div className="row space-between">
-        <h1>{t('stocktakeTitle')}</h1>
+        <h1>{t('stocktakeOfArea', { area: stocktakeLabel(openStocktake, t, lang) })}</h1>
         <div className="segmented" role="group">
           <button className={mode === 'one' ? 'on' : ''} onClick={() => setMode('one')}>
             {t('oneAtATime')}
