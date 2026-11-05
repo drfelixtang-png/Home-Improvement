@@ -328,3 +328,39 @@ li:hover > .acts, li:focus-within > .acts, .mail-top:hover .acts, .acts:focus-wi
 .key { display: inline-block; width: 12px; height: 3px; margin: 0 4px 2px 12px; vertical-align: middle; }
 .key.energy { background: var(--accent); } .key.mood { background: #b48cf2; } .key.sleep { background: #4f8fd6; opacity: 0.6; height: 8px; }
 .review details summary { cursor: pointer; color: var(--muted); margin: 6px 0; }
+
+/* ---------- Home page ---------- */
+.home-title { font-family: var(--sans); }
+.home .stats { gap: 8px 28px; }
+.all-clear { margin: 0; color: var(--good); }
+.links a { color: var(--accent); }
+.alert-banner { background: var(--crit-bg); border-color: var(--crit); }
+.alert-banner b { color: var(--crit); }
+.home-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.home-tabs button { font: inherit; font-size: 0.86rem; font-weight: 600; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+.home-tabs button.on { color: #131a22; background: var(--accent); border-color: var(--accent); }
+.home-tabs button.on .tc { color: #131a22; }
+.hitems { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.hi { border-bottom: 1px solid var(--line); padding: 8px 0; }
+.hi-main { display: flex; gap: 12px; align-items: flex-start; }
+.hi-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hi-text .note { font-style: italic; }
+.hi-acts { display: flex; gap: 4px; flex: none; }
+.due-chip { flex: none; min-width: 74px; text-align: center; font-family: var(--mono); font-size: 0.72rem; font-weight: 600; padding: 2px 6px; border-radius: 3px; background: var(--chip); color: var(--muted); margin-top: 2px; }
+.due-chip.overdue { background: var(--crit-bg); color: var(--crit); }
+.due-chip.week { background: var(--warn-bg); color: var(--warn); }
+.due-chip.month { background: #1d3049; color: #8fb8ea; }
+.due-chip.done { background: #17352a; color: var(--good); }
+.due-chip.nodate { background: transparent; border: 1px dashed var(--line); }
+.hi.done .hi-text > span:first-child { color: var(--muted); }
+.hi-edit { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; margin-top: 8px; padding: 10px; background: var(--panel); border: 1px solid var(--line); }
+.hi-edit label { display: flex; flex-direction: column; gap: 4px; font-size: 0.76rem; color: var(--muted); min-width: 0; }
+.hi-edit .wide { grid-column: 1 / -1; }
+.hi-edit .form-row { grid-column: 1 / -1; margin-top: 0; }
+.hi-edit input, .hi-edit select { font: inherit; font-size: 0.9rem; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0; }
+.add-item { margin-top: 10px; }
+.add-item summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 0.88rem; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.ready-bar { height: 10px; background: var(--chip); border-radius: 5px; overflow: hidden; }
+.ready-bar span { display: block; height: 100%; background: var(--good); }
+@media (max-width: 640px) { .hi-main { flex-wrap: wrap; } .hi-acts { width: 100%; justify-content: flex-end; } }

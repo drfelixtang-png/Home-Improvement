@@ -5,6 +5,7 @@
 //
 //   GET ?kind=markets&symbols=^HSI,^GSPC   -> { quotes: Quote[] }
 //   GET ?kind=news                          -> { regions: Region[] }
+//   GET ?kind=alerts                        -> weather, quakes, outages, tsunami near home
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -147,6 +148,85 @@ async function news(): Promise<Region[]> {
   }))
 }
 
+// ------------------------------------------------------------------ home alerts
+// Hazards near the house in Richmond, BC: weather warnings, earthquakes, power outages
+// and tsunami bulletins. Only fixed official sources; no caller input.
+/* eslint-disable @typescript-eslint/no-explicit-any -- upstream JSON is untyped */
+const HOME = { lat: 49.135, lon: -123.168 }
+
+function km(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const r = (d: number) => (d * Math.PI) / 180
+  const a = Math.sin(r(lat2 - lat1) / 2) ** 2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(r(lon2 - lon1) / 2) ** 2
+  return 6371 * 2 * Math.asin(Math.sqrt(a))
+}
+
+async function getJson(url: string): Promise<unknown> {
+  const r = await fetch(url, { headers: { 'User-Agent': UA } })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
+
+async function weatherAlerts() {
+  const b = `${HOME.lon - 0.02},${HOME.lat - 0.02},${HOME.lon + 0.02},${HOME.lat + 0.02}`
+  const d = (await getJson(`https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit=30&bbox=${b}`)) as any
+  const now = Date.now()
+  const seen = new Set<string>()
+  return (d.features ?? []).map((f: any) => f.properties).filter((p: any) => {
+    const end = Date.parse(p.expiration_datetime ?? p.event_end_datetime ?? '')
+    const k = `${p.alert_code}:${p.alert_name_en}`
+    if ((end && end < now) || seen.has(k)) return false
+    seen.add(k)
+    return true
+  }).map((p: any) => ({
+    type: p.alert_type ?? null, // warning, watch, advisory, statement
+    name: p.alert_name_en ?? p.alert_short_name_en ?? 'Weather alert',
+    area: p.feature_name_en ?? null,
+    text: String(p.alert_text_en ?? '').slice(0, 700),
+    published: p.publication_datetime ?? null,
+    ends: p.event_end_datetime ?? p.expiration_datetime ?? null,
+  }))
+}
+
+async function quakes() {
+  const d = (await getJson('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson')) as any
+  return (d.features ?? []).map((f: any) => {
+    const [lon, lat] = f.geometry.coordinates
+    return { mag: f.properties.mag, place: f.properties.place, time: f.properties.time, km: Math.round(km(HOME.lat, HOME.lon, lat, lon)), url: f.properties.url }
+  }).filter((q: any) => q.km <= 400).sort((a: any, b: any) => b.time - a.time).slice(0, 10)
+}
+
+async function outages() {
+  const d = (await getJson('https://www.bchydro.com/power-outages/app/outages-map-data.json')) as any[]
+  return d.map((o) => ({
+    municipality: o.municipality, area: o.area, customers: o.numCustomersOut, cause: o.cause,
+    status: o.crewStatusDescription, since: o.dateOff, km: Math.round(km(HOME.lat, HOME.lon, o.latitude, o.longitude) * 10) / 10,
+  })).filter((o) => o.municipality === 'Richmond' || o.km <= 5).sort((a, b) => a.km - b.km).slice(0, 10)
+}
+
+async function tsunami() {
+  const r = await fetch('https://www.tsunami.gov/events/xml/PAAQAtom.xml', { headers: { 'User-Agent': UA } })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  const xml = await r.text()
+  const entries = xml.match(/<entry>[\s\S]*?<\/entry>/gi) ?? []
+  return entries.map((e) => {
+    const text = decode(e.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ')
+    const category = (text.match(/Category:\s*([A-Za-z ]+?)\s+Issue Time/) ?? [])[1] ?? 'Unknown'
+    return {
+      title: tag(e, 'title'), updated: tag(e, 'updated'), category,
+      threat: /warning|advisory|watch/i.test(category),
+      bc: /british columbia/i.test(text),
+      note: (text.match(/Note:\s*\*?\s*([^*]+?)(Definition:|$)/) ?? [])[1]?.trim() ?? null,
+    }
+  }).filter((t) => Date.now() - Date.parse(t.updated) < 48 * 3600000)
+}
+
+async function homeAlerts() {
+  const settle = async <T,>(f: () => Promise<T>) => { try { return { ok: true, data: await f() } } catch (e) { return { ok: false, error: String(e), data: [] as unknown as T } } }
+  const [w, q, o, t] = await Promise.all([settle(weatherAlerts), settle(quakes), settle(outages), settle(tsunami)])
+  return { weather: w, quakes: q, outages: o, tsunami: t, fetchedAt: new Date().toISOString() }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 // ------------------------------------------------------------------ serve
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -160,5 +240,8 @@ Deno.serve(async (req) => {
   if (kind === 'news') {
     return json({ regions: await news(), fetchedAt: new Date().toISOString() }, 200, 600)
   }
-  return json({ error: 'Use kind=markets or kind=news' }, 400, 0)
+  if (kind === 'alerts') {
+    return json(await homeAlerts(), 200, 300)
+  }
+  return json({ error: 'Use kind=markets, kind=news or kind=alerts' }, 400, 0)
 })
