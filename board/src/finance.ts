@@ -16,6 +16,7 @@ export interface FinProperty {
   id: string; key: string; address: string; share: number; status: 'held' | 'sold' | 'operated'; use: string
   value: number | null; value_source: string; value_as_of: string | null; mortgage: number
   sold_on: string | null; sale_price: number | null; cost: number | null; note: string; sort: number
+  prev_value: number | null; prev_value_as_of: string | null
 }
 export interface FinIe {
   id: string; month: string; kind: 'income' | 'expense'; line: string; amount: number
@@ -25,7 +26,9 @@ export interface FinHistory { as_of: string; measure: string; category: string |
 export interface FinHolding {
   id: string; account_id: string; symbol: string; name: string; name_zh: string
   shares: number; currency: Cur; last_price: number | null; updated_at: string
+  sector: string; asset_type: AssetType; risk: number | null
 }
+export type AssetType = 'stock' | 'reit' | 'fund' | 'crypto' | 'stablecoin' | 'bond' | 'other'
 export type TxKind = 'income' | 'expense' | 'transfer' | 'capital'
 export interface FinTransaction {
   id: string; account: string; posted_on: string; amount: number; currency: Cur; description: string
@@ -74,14 +77,14 @@ export async function loadFinance(): Promise<Finance> {
   ])
   const transactions = txRows.map((t) => ({ ...t, amount: Number(t.amount) }))
   if (settings.error) throw settings.error
-  const holdings = holdingRows.map((h) => ({ ...h, shares: Number(h.shares), last_price: n(h.last_price) })).filter((h) => h.shares > 0)
+  const holdings = holdingRows.map((h) => ({ ...h, shares: Number(h.shares), last_price: n(h.last_price), risk: h.risk === null ? null : Number(h.risk) })).filter((h) => h.shares > 0)
   return {
     holdings,
     prices: await loadPrices([...new Set(holdings.map((h) => h.symbol))]),
     accounts,
     balances: balances.map((b) => ({ ...b, amount: Number(b.amount) })),
     properties: properties.map((p) => ({
-      ...p, share: Number(p.share), value: n(p.value), mortgage: Number(p.mortgage ?? 0), sale_price: n(p.sale_price), cost: n(p.cost),
+      ...p, share: Number(p.share), value: n(p.value), mortgage: Number(p.mortgage ?? 0), sale_price: n(p.sale_price), cost: n(p.cost), prev_value: n(p.prev_value),
     })),
     ie: [...ie.map((r) => ({ ...r, amount: Number(r.amount), covers_months: Number(r.covers_months || 1) })), ...txToIe(transactions)],
     transactions,
@@ -172,7 +175,7 @@ export function accountAmount(f: Finance, accountId: string, latest: Map<string,
 export const fromCad = (amount: number, cur: Cur, fx: Fx) => (cur === 'USD' ? amount / fx.usdCad : cur === 'HKD' ? amount * fx.cadHkd : amount)
 export const convert = (amount: number, from: Cur, to: Cur, fx: Fx) => (from === to ? amount : fromCad(toCad(amount, from, fx), to, fx))
 
-export async function saveHolding(userId: string, row: { account_id: string; symbol: string; name: string; name_zh: string; shares: number; currency: Cur; last_price: number | null }): Promise<void> {
+export async function saveHolding(userId: string, row: { account_id: string; symbol: string; name: string; name_zh: string; shares: number; currency: Cur; last_price: number | null; sector?: string; asset_type?: AssetType; risk?: number | null }): Promise<void> {
   const { error } = await supabase.from('fin_holdings').upsert({ ...row, user_id: userId, updated_at: new Date().toISOString() }, { onConflict: 'account_id,symbol' })
   if (error) throw error
 }
