@@ -490,11 +490,14 @@ export function WeatherDetail({ wx }: { wx: Weather }) {
 }
 
 // ================================================================= Markets
+// Yahoo Finance has a page for every symbol the board uses (stocks, indexes, currencies, crypto, futures).
+const quoteUrl = (symbol: string) => `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/`
+
 function QuoteRow({ q, label }: { q: Quote; label: string }) {
   const up = (q.change ?? 0) >= 0
   return (
     <li className="q">
-      <span className="q-name">{label}</span>
+      <a className="q-name" href={quoteUrl(q.symbol)} target="_blank" rel="noreferrer" title={`${q.name} on Yahoo Finance`}>{label}</a>
       <Spark values={q.spark} up={up} />
       <span className="n">{num(q.price, q.price !== null && q.price < 50 ? 4 : 2)}</span>
       <span className={`n chg ${up ? 'up' : 'dn'}`}>{pct(q.changePct)}</span>
@@ -533,7 +536,7 @@ export function MarketsDetail({ quotes, watch, onSave }: { quotes: Quote[]; watc
               const up = (q.change ?? 0) >= 0
               return (
                 <tr key={q.symbol}>
-                  <td>{watch.find((w) => w.symbol === q.symbol)?.label ?? q.name}<span className="sub">{q.name}</span></td>
+                  <td><a className="q-link" href={quoteUrl(q.symbol)} target="_blank" rel="noreferrer">{watch.find((w) => w.symbol === q.symbol)?.label ?? q.name} <span aria-hidden="true">↗</span></a><span className="sub">{q.name}</span></td>
                   <td className="mono">{q.symbol}</td>
                   <td><Spark values={q.spark} up={up} /></td>
                   <td className="n">{num(q.price, q.price !== null && q.price < 50 ? 4 : 2)} <span className="sub">{q.currency}</span></td>
@@ -545,7 +548,7 @@ export function MarketsDetail({ quotes, watch, onSave }: { quotes: Quote[]; watc
             })}
           </tbody>
         </table></div>
-        <p className="sub">Prices from Yahoo Finance, may be delayed. Times shown in each market's own time zone.</p>
+        <p className="sub">Prices from Yahoo Finance, may be delayed. Times shown in each market's own time zone. Click a name to open its page on Yahoo Finance.</p>
       </section>
       <section className="sub-panel span-2">
         <h3>Watchlist 觀察清單</h3>
