@@ -238,8 +238,8 @@ export function PropertyAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: b
         <tbody>
           {rows.map((r) => (
             <tr key={r.p.id} className={r.p.status === 'sold' ? 'muted' : ''}>
-              <td>{A.shortAddress(r.p.address)}<span className="sub">{r.p.status === 'sold' ? `Sold ${r.p.sold_on?.slice(0, 7)}` : r.p.status === 'operated' ? 'Run, not owned' : r.p.use}</span></td>
-              <td className="n">{r.p.status === 'sold' ? (r.realised !== null ? <span className="dn">{show ? money(r.realised) : '••••'}<span className="sub">realised, our share</span></span> : '-') : show ? money(r.equity) : '••••'}</td>
+              <td>{A.shortAddress(r.p.address)}<span className="sub">{r.p.status === 'sold' ? `Sold ${r.p.sold_on?.slice(0, 7)}` : r.p.status === 'operated' ? 'Run, not owned' : r.p.status === 'record' ? `${r.p.details?.owner ?? 'Family'}, not counted` : r.p.use}</span></td>
+              <td className="n">{r.p.status === 'sold' ? (r.realised !== null ? <span className="dn">{show ? money(r.realised) : '••••'}<span className="sub">realised, our share</span></span> : '-') : r.p.status !== 'held' ? '-' : show ? money(r.equity) : '••••'}</td>
               <td className="n">{r.p.status === 'held' ? pct(r.pctOfWorth, 1) : '-'}</td>
               <td className={`n ${r.change !== null && r.change < 0 ? 'dn' : 'up'}`}>{r.change === null ? '-' : `${r.change >= 0 ? '+' : '−'}${pct(Math.abs(r.change), 1)}`}{r.p.prev_value_as_of && <span className="sub">since {r.p.prev_value_as_of.slice(0, 4)}</span>}</td>
               <td className="n">{r.yearIncome ? (show ? money(r.yearIncome) : '••••') : '-'}</td>
@@ -328,7 +328,7 @@ export function AssessmentChart({ f, show }: { f: Finance; show: boolean }) {
         ))}
       </svg>
       <p className="sub legend">
-        {series.map((s) => <span key={s.p.id} className="leg-item"><span className={`key-line ${s.cls}`} />{shortAddress(s.p.address)}{s.dash ? ' (Thomson, not counted)' : s.p.share < 1 ? ` (${Math.round(s.p.share * 100)}%)` : ''}</span>)}
+        {series.map((s) => <span key={s.p.id} className="leg-item"><span className={`key-line ${s.cls}`} />{shortAddress(s.p.address)}{s.dash ? ` (${s.p.details?.owner ?? 'family'}, not counted)` : s.p.share < 1 ? ` (${Math.round(s.p.share * 100)}%)` : ''}</span>)}
       </p>
       <div className="tbl-wrap"><table className="tbl">
         <thead><tr><th>Year</th>{series.map((s) => <th key={s.p.id} className="n">{shortAddress(s.p.address)}</th>)}</tr></thead>

@@ -13,10 +13,11 @@ export interface FinAccount {
 }
 export interface FinBalance { id: string; account_id: string; as_of: string; amount: number; note: string }
 export interface FinProperty {
-  id: string; key: string; address: string; share: number; status: 'held' | 'sold' | 'operated'; use: string
+  id: string; key: string; address: string; share: number; status: 'held' | 'sold' | 'operated' | 'record'; use: string
   value: number | null; value_source: string; value_as_of: string | null; mortgage: number
   sold_on: string | null; sale_price: number | null; cost: number | null; note: string; sort: number
   prev_value: number | null; prev_value_as_of: string | null
+  details?: { owner?: string; [k: string]: unknown }
 }
 export interface FinIe {
   id: string; month: string; kind: 'income' | 'expense'; line: string; amount: number
