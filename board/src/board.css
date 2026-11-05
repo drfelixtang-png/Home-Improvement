@@ -468,3 +468,12 @@ a.q-link span { font-size: 0.8em; color: var(--muted); }
 .fin-bd-tbl td.n { white-space: nowrap; }
 .c12 { background: #4caf7a; } .c13 { background: #9ccf6a; } .c14 { background: #f0d24c; } .c15 { background: #f0954c; } .c16 { background: #ff6b5b; }
 .s12 { stroke: #4caf7a; } .s13 { stroke: #9ccf6a; } .s14 { stroke: #f0d24c; } .s15 { stroke: #f0954c; } .s16 { stroke: #ff6b5b; }
+
+.fin-chart .aline { fill: none; stroke-width: 2.2; }
+.fin-chart .apt { stroke: var(--bg); stroke-width: 1.5; }
+.fin-chart .apt.s0 { fill: #f0b44c; } .fin-chart .apt.s1 { fill: #8fb8de; } .fin-chart .apt.s2 { fill: #5fcf8f; } .fin-chart .apt.s3 { fill: #e07a6b; }
+.legend .leg-item { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; }
+.legend .key-line { display: inline-block; width: 16px; height: 0; border-top: 3px solid; }
+.key-line.s0 { border-color: #f0b44c; } .key-line.s1 { border-color: #8fb8de; } .key-line.s2 { border-color: #5fcf8f; } .key-line.s3 { border-color: #e07a6b; }
+.legend { flex-wrap: wrap; }
+.fin-chart.assess { max-width: 980px; } .fin-chart.assess text { font-size: 9px; }
