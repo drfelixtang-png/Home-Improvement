@@ -143,7 +143,7 @@ export function ReviewPage({ settings, checkins, reviews, lang }: { settings: Bo
                 {recent.map((c) => (
                   <tr key={c.day}>
                     <td>{shortDate(c.day)}</td>
-                    <td className="n">{c.sleep_hours ?? '-'}</td>
+                    <td className="n">{c.sleep_hours ?? '-'}{c.bed_time && c.wake_time ? <span className="sub">{c.bed_time} to {c.wake_time}</span> : null}</td>
                     <td className="n">{c.energy_am ?? '-'} / {c.energy_pm ?? '-'}</td>
                     <td className="n">{c.mood_am ?? '-'} / {c.mood_pm ?? '-'}</td>
                     <td>{c.win || '-'}{c.slipped && <span className="sub">Slipped: {c.slipped}</span>}</td>

@@ -364,3 +364,10 @@ li:hover > .acts, li:focus-within > .acts, .mail-top:hover .acts, .acts:focus-wi
 .ready-bar { height: 10px; background: var(--chip); border-radius: 5px; overflow: hidden; }
 .ready-bar span { display: block; height: 100%; background: var(--good); }
 @media (max-width: 640px) { .hi-main { flex-wrap: wrap; } .hi-acts { width: 100%; justify-content: flex-end; } }
+
+/* ---------- bed and wake times ---------- */
+.sleep-times { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; }
+.sleep-times label { display: flex; flex-direction: column; gap: 4px; font-size: 0.76rem; color: var(--muted); }
+.sleep-times input { font: inherit; font-family: var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; color-scheme: dark; }
+.sleep-total { font-family: var(--mono); padding-bottom: 6px; }
+.sleep-total b { font-size: 1.3rem; color: var(--accent); }
