@@ -436,3 +436,20 @@ a.q-link span { font-size: 0.8em; color: var(--muted); }
 .fin p.span-2 { margin: 0; }
 .fin-cat { font: inherit; font-size: 0.82rem; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; max-width: 100%; }
 .fin-similar { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+/* Finance analytics */
+.fin-bd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px 24px; }
+.fin-bd { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fin-bd h4, .fin-movers h4 { margin: 0; }
+.fin-bd .fin-split { height: 18px; font-size: 0.68rem; }
+.fin-bd-tbl td { padding: 3px 6px; font-size: 0.82rem; }
+.dot-c { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
+.c0 { background: #f0b44c; } .c1 { background: #8fb8de; } .c2 { background: #5fcf8f; } .c3 { background: #e07a6b; } .c4 { background: #b79ce0; }
+.c5 { background: #6fd3cf; } .c6 { background: #e6a1c8; } .c7 { background: #c9c27a; } .c8 { background: #9aa7b8; } .c9 { background: #d98f4e; }
+.fin-movers { display: flex; flex-direction: column; gap: 6px; }
+.fin-chart .bar-in { fill: var(--good); }
+.fin-chart .bar-out { fill: var(--crit); opacity: 0.8; }
+.legend { display: flex; align-items: center; gap: 6px; }
+.legend .key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.legend .key.in { background: var(--good); } .legend .key.out { background: var(--crit); margin-left: 10px; }
+.fin-sector { width: 9em !important; font-family: var(--sans) !important; }
+.fin .stat b.up { color: var(--good); }

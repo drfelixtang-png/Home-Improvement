@@ -7,6 +7,8 @@ import {
   saveBalances, saveFinSettings, saveHolding,
   sumMap, toCad, updateProperty, yearLines,
 } from './finance'
+import { AccountsAnalytics, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
+import { RISK_LABEL } from './finAnalytics'
 import type { AccountKind, Cur, Finance, FinAccount, FinHolding, FinProperty, FinTransaction, Fx, TxKind } from './finance'
 
 type Lang = 'zh' | 'en'
@@ -190,12 +192,12 @@ function SpendForm({ f, userId, fx, onDone }: { f: Finance; userId: string; fx: 
 
 function PropertyRow({ p, show, onDone }: { p: FinProperty; show: boolean; onDone: () => void }) {
   const [edit, setEdit] = useState(false)
-  const [v, setV] = useState({ value: String(p.value ?? ''), source: p.value_source, as_of: p.value_as_of ?? '' })
+  const [v, setV] = useState({ value: String(p.value ?? ''), source: p.value_source, as_of: p.value_as_of ?? '', prev: String(p.prev_value ?? ''), prev_as_of: p.prev_value_as_of ?? '' })
   const [msg, setMsg] = useState<string | null>(null)
   const M = (x: number | null) => (x === null ? '-' : show ? money(x) : '••••')
   const save = async (e: FormEvent) => {
     e.preventDefault()
-    try { await updateProperty(p.id, { value: v.value === '' ? null : Number(v.value), value_source: v.source, value_as_of: v.as_of || null }); setEdit(false); onDone() } catch (err) { setMsg((err as Error).message) }
+    try { await updateProperty(p.id, { value: v.value === '' ? null : Number(v.value), value_source: v.source, value_as_of: v.as_of || null, prev_value: v.prev === '' ? null : Number(v.prev), prev_value_as_of: v.prev_as_of || null }); setEdit(false); onDone() } catch (err) { setMsg((err as Error).message) }
   }
   return (<>
     <tr className={p.status === 'sold' ? 'muted' : ''}>
@@ -213,6 +215,8 @@ function PropertyRow({ p, show, onDone }: { p: FinProperty; show: boolean; onDon
           <label>Whole property value CA$<input inputMode="decimal" value={v.value} onChange={(e) => setV({ ...v, value: e.target.value.replace(/[^0-9.]/g, '') })} /></label>
           <label>Source<input value={v.source} onChange={(e) => setV({ ...v, source: e.target.value })} /></label>
           <label>Value as of<input type="date" value={v.as_of} onChange={(e) => setV({ ...v, as_of: e.target.value })} /></label>
+          <label>Previous value CA$<input inputMode="decimal" value={v.prev} onChange={(e) => setV({ ...v, prev: e.target.value.replace(/[^0-9.]/g, '') })} /></label>
+          <label>Previous value as of<input type="date" value={v.prev_as_of} onChange={(e) => setV({ ...v, prev_as_of: e.target.value })} /></label>
           <div className="form-row"><button type="submit" className="btn">Save 儲存</button>{msg && <span className="problem">{msg}</span>}</div>
         </form>
       </td></tr>
@@ -224,13 +228,15 @@ function PropertyRow({ p, show, onDone }: { p: FinProperty; show: boolean; onDon
 function HoldingRow({ f, h, fx, show, userId, onDone }: { f: Finance; h: FinHolding; fx: Fx; show: boolean; userId: string; onDone: () => void }) {
   const [edit, setEdit] = useState(false)
   const [shares, setShares] = useState(String(h.shares))
+  const [sector, setSector] = useState(h.sector)
+  const [risk, setRisk] = useState(h.risk ? String(h.risk) : '')
   const [msg, setMsg] = useState<string | null>(null)
   const q = f.prices[h.symbol]
   const price = holdingPrice(f, h)
   const value = h.shares * price
   const save = async (e: FormEvent) => {
     e.preventDefault()
-    try { await saveHolding(userId, { account_id: h.account_id, symbol: h.symbol, name: h.name, name_zh: h.name_zh, shares: Number(shares), currency: h.currency, last_price: price }); setEdit(false); onDone() } catch (err) { setMsg((err as Error).message) }
+    try { await saveHolding(userId, { account_id: h.account_id, symbol: h.symbol, name: h.name, name_zh: h.name_zh, shares: Number(shares), currency: h.currency, last_price: price, sector: sector.trim(), risk: risk ? Number(risk) : null }); setEdit(false); onDone() } catch (err) { setMsg((err as Error).message) }
   }
   return (
     <tr>
@@ -242,6 +248,11 @@ function HoldingRow({ f, h, fx, show, userId, onDone }: { f: Finance; h: FinHold
         {edit ? (
           <form className="fin-inline" onSubmit={save}>
             <input aria-label={`Shares of ${h.name}`} inputMode="decimal" value={shares} onChange={(e) => setShares(e.target.value.replace(/[^0-9.]/g, ''))} />
+            <input aria-label={`Sector of ${h.name}`} placeholder="Sector" className="fin-sector" value={sector} onChange={(e) => setSector(e.target.value)} />
+            <select className="fin-cat" aria-label={`Risk of ${h.name}`} value={risk} onChange={(e) => setRisk(e.target.value)}>
+              <option value="">Not rated</option>
+              {[1, 2, 3, 4, 5].map((r) => <option key={r} value={r}>{RISK_LABEL[r]}</option>)}
+            </select>
             <button type="submit" className="act">Save</button>
             {msg && <span className="problem">{msg}</span>}
           </form>
@@ -457,6 +468,8 @@ function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show
         </div>
       </section>
 
+      <InvestAnalytics f={f} fx={fx} show={show} />
+
       {view === 'all' ? (
         <section className="sub-panel span-2">
           <h3>All stocks 全部持股 <span className="sub inline">largest first</span></h3>
@@ -625,6 +638,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
           <SpendForm f={f} userId={userId} fx={fx} onDone={onReload} />
           <span className="sub">{est?.source}</span>
         </section>
+
+        <OverviewAnalytics f={f} fx={fx} show={show} />
       </div>
       </>)}
 
@@ -663,6 +678,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
             })}
           </div>
         </section>
+
+        <AccountsAnalytics f={f} fx={fx} show={show} />
       </div>
       </>)}
 
@@ -693,6 +710,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
           </p>
           <details className="add-item"><summary>Add income or spending 加入收支</summary><IeForm f={f} userId={userId} onDone={onReload} /></details>
         </section>
+
+        <CashflowAnalytics f={f} fx={fx} show={show} />
 
         <Statements f={f} fx={fx} show={show} onDone={onReload} />
 
@@ -732,6 +751,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
             <tbody>{f.properties.map((p) => <PropertyRow key={p.id} p={p} show={show} onDone={onReload} />)}</tbody>
           </table></div>
         </section>
+
+        <PropertyAnalytics f={f} fx={fx} show={show} />
       </div>
       )}
 
@@ -742,6 +763,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
           <Chart points={history} show={show} />
           <p className="sub">From the old spreadsheet until August 2024, then today. Figures kept in Hong Kong dollars are converted at today&apos;s rate, so older points move a little with the exchange rate. The drop after 2021 reflects the move from Hong Kong and the change in how property was counted.</p>
         </section>
+
+        <HistoryAnalytics f={f} fx={fx} show={show} />
 
         <section className="sub-panel span-2">
           <h3>Year by year, from the old spreadsheet 歷年概覽</h3>
