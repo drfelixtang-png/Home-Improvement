@@ -32,7 +32,8 @@ function lineFor(stocktakeId: string, s: ItemSummary) {
   }
 }
 
-export function StocktakeScreen() {
+// area: a location named in the link (for example from the Morning Board), offered first.
+export function StocktakeScreen({ area }: { area?: string }) {
   const { t, lang, summaries, settings, openStocktake, areas, run, reload } = useStore()
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set())
   const [linesFor, setLinesFor] = useState<string | null>(null)
@@ -90,15 +91,22 @@ export function StocktakeScreen() {
         <p>{t('stocktakeIntro')}</p>
         <h2>{t('stocktakeWhat')}</h2>
         <div className="area-choices">
-          {areas.map((a) => (
-            <button key={a.location} className="area-choice" onClick={() => run(() => startStocktake([a.location]))}>
+          {[...areas]
+            .sort((x, y) => Number(y.location === area) - Number(x.location === area))
+            .map((a) => (
+            <button
+              key={a.location}
+              className={`area-choice ${a.location === area ? 'primary suggested' : ''}`}
+              autoFocus={a.location === area}
+              onClick={() => run(() => startStocktake([a.location]))}
+            >
               <strong>{t('countArea', { area: word(lang, a.location) })}</strong>
               <small>
                 {t('areaItems', { n: count(a.location) })} · {areaText(a, t, lang)}
               </small>
             </button>
           ))}
-          <button className="area-choice primary" onClick={() => run(() => startStocktake(null))}>
+          <button className={`area-choice ${area ? '' : 'primary'}`} onClick={() => run(() => startStocktake(null))}>
             <strong>{t('countEverything')}</strong>
             <small>{t('areaItems', { n: count(null) })}</small>
           </button>

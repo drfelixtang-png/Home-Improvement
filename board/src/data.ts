@@ -1,6 +1,7 @@
 import { supabase } from '../../src/lib/supabase'
-import type { Batch, Item, Settings as StockSettings, Stocktake } from '../../src/lib/types'
-import { nextStocktakeDate, summarise } from '../../src/lib/status'
+import type { Batch, Item, PriceRecord, ProductLink, Settings as StockSettings, Stocktake } from '../../src/lib/types'
+import { areaDue, covers, locationRank, priceStats, shoppingLines, summarise } from '../../src/lib/status'
+import type { AreaDue } from '../../src/lib/status'
 import type { ItemSummary } from '../../src/lib/status'
 import { daysUntil } from '../../src/lib/dates'
 
@@ -281,31 +282,60 @@ export interface StockpileView {
   expiring: ItemSummary[]
   empty: ItemSummary[]
   total: number
-  nextStocktake: string | null
-  stocktakeInProgress: boolean
+  areas: AreaDue[]
+  // The open stock-take, if any: which areas it covers and how far it has got.
+  open: { label: string[] | null; done: number; total: number } | null
+  shopping: { count: number; estTotal: number }
 }
 
 export async function loadStockpile(): Promise<StockpileView | null> {
-  const [items, batches, settings, stocktakes] = await Promise.all([
+  const [items, batches, settings, stocktakes, prices, links] = await Promise.all([
     supabase.from('items').select('*').eq('archived', false),
     supabase.from('batches').select('*'),
     supabase.from('settings').select('*').maybeSingle(),
     supabase.from('stocktakes').select('*').order('taken_on', { ascending: false }),
+    supabase.from('price_records').select('*').order('bought_on', { ascending: false }),
+    supabase.from('product_links').select('*'),
   ])
   if (items.error) throw items.error
   if (!settings.data) return null
   const s = settings.data as StockSettings
-  const list = (items.data as Item[]).map((i) => summarise(i, (batches.data ?? []) as Batch[], s))
+  const its = items.data as Item[]
+  const list = its.map((i) => summarise(i, (batches.data ?? []) as Batch[], s))
   const st = (stocktakes.data ?? []) as Stocktake[]
-  const lastDone = st.find((x) => x.status === 'done')?.taken_on ?? null
+  const used = [...new Set(its.map((i) => i.location))].sort((a, b) => locationRank(a) - locationRank(b))
+  const openSt = st.find((x) => x.status === 'in_progress') ?? null
+  let open: StockpileView['open'] = null
+  if (openSt) {
+    const res = await supabase.from('stocktake_lines').select('id', { count: 'exact', head: true }).eq('stocktake_id', openSt.id)
+    open = {
+      label: openSt.locations && openSt.locations.length ? openSt.locations : null,
+      done: res.count ?? 0,
+      total: list.filter((x) => covers(openSt, x.item.location)).length,
+    }
+  }
+  // Shopping list size and estimated cost, the same way the tracker works it out.
+  const pr = (prices.data ?? []) as PriceRecord[]
+  const pl = (links.data ?? []) as ProductLink[]
+  const lines = shoppingLines(list, s)
+  const estTotal = lines.reduce((sum, l) => {
+    const last = priceStats(pr.filter((p) => p.item_id === l.summary.item.id)).lastUnit
+    const cheapest = pl
+      .filter((k) => k.item_id === l.summary.item.id && k.price !== null && k.pack_qty)
+      .map((k) => Number(k.price) / Number(k.pack_qty))
+      .sort((a, b) => a - b)[0]
+    const ref = last ?? cheapest ?? null
+    return sum + (ref !== null && l.buy > 0 ? ref * l.buy : 0)
+  }, 0)
   const warn = 30
   return {
     below: list.filter((x) => x.onHand < Number(x.item.target_qty)).sort((a, b) => a.onHand / (Number(a.item.target_qty) || 1) - b.onHand / (Number(b.item.target_qty) || 1)),
     expiring: list.filter((x) => x.daysToExpiry !== null && x.daysToExpiry <= warn).sort((a, b) => (a.daysToExpiry ?? 0) - (b.daysToExpiry ?? 0)),
     empty: list.filter((x) => x.onHand <= 0),
     total: list.length,
-    nextStocktake: nextStocktakeDate(lastDone, s),
-    stocktakeInProgress: st.some((x) => x.status === 'in_progress'),
+    areas: areaDue(st, used, s),
+    open,
+    shopping: { count: lines.length, estTotal },
   }
 }
 

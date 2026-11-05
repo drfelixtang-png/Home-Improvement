@@ -1,6 +1,7 @@
 import { StoreProvider, useStore } from './lib/store'
 import { useRoute } from './lib/router'
 import { configMissing } from './lib/supabase'
+import { BOARD_URL, cameFromBoard } from './lib/fromBoard'
 import { Login } from './screens/Login'
 import { Inventory } from './screens/Inventory'
 import { ItemForm } from './screens/ItemForm'
@@ -15,6 +16,7 @@ function Header() {
   const { t, lang, setLang, session } = useStore()
   const route = useRoute()
   const top = route[0] ?? ''
+  const fromBoard = cameFromBoard()
   const nav: [string, string][] = [
     ['', t('navInventory')],
     ['shopping', t('navShopping')],
@@ -28,6 +30,14 @@ function Header() {
         <a className="brand" href="#/">
           {t('appName')}
         </a>
+        <nav className="app-switch" aria-label={t('switchApp')}>
+          <a href={`${BOARD_URL}#/${fromBoard ? 'stockpile' : ''}`} className={fromBoard ? 'back' : ''}>
+            {fromBoard ? `← ${t('backToBoard')}` : t('morningBoard')}
+          </a>
+          <span className="here" aria-current="page">
+            {t('stockpileShort')}
+          </span>
+        </nav>
         <button className="lang" onClick={() => setLang(lang === 'en' ? 'zh-Hant' : 'en')}>
           {t('languageToggle')}
         </button>
@@ -59,7 +69,7 @@ function Screen() {
   else if (a === 'item' && b && c === 'edit') page = <ItemForm id={b} key={b} />
   else if (a === 'item' && b) page = <ItemDetail id={b} />
   else if (a === 'archived') page = <Archived />
-  else if (a === 'stocktake') page = <StocktakeScreen />
+  else if (a === 'stocktake') page = <StocktakeScreen area={b} key={b ?? 'all'} />
   else if (a === 'shopping') page = <Shopping />
   else if (a === 'history' && b) page = <HistoryDetail id={b} />
   else if (a === 'history') page = <History />

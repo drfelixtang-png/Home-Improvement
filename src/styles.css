@@ -1157,3 +1157,39 @@ label.inline select {
   font-weight: 400;
   font-size: 0.85rem;
 }
+
+/* ---------- switch between the Stockpile Tracker and the Morning Board ---------- */
+.header-top {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.app-switch {
+  display: inline-flex;
+  margin-left: auto;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  overflow: hidden;
+  font-size: 0.85rem;
+}
+.app-switch a,
+.app-switch span {
+  padding: 6px 12px;
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.app-switch .here {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--brand);
+  font-weight: 700;
+}
+.app-switch a.back {
+  font-weight: 700;
+}
+.app-switch a:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.area-choice.suggested {
+  outline: 3px solid var(--brand);
+  outline-offset: 2px;
+}
