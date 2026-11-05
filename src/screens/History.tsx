@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../lib/store'
+import { stocktakeLabel } from '../lib/areas'
 import { supabase } from '../lib/supabase'
 import { itemName, word } from '../lib/i18n'
 import { formatDate, formatQty } from '../lib/dates'
@@ -43,7 +44,9 @@ export function History() {
           {done.map((s) => (
             <li key={s.id}>
               <a className="card history-row" href={`#/history/${s.id}`}>
-                <strong>{formatDate(s.taken_on, lang)}</strong>
+                <strong>
+                  {formatDate(s.taken_on, lang)} · {stocktakeLabel(s, t, lang)}
+                </strong>
                 {stats[s.id] && (
                   <span className="muted">
                     {t('itemsCounted', { n: stats[s.id].n })} · {t('itemsShort', { n: stats[s.id].short })}
@@ -76,7 +79,9 @@ export function HistoryDetail({ id }: { id: string }) {
       <p>
         <a href="#/history">← {t('back')}</a>
       </p>
-      <h1>{st ? t('stocktakeOn', { date: formatDate(st.taken_on, lang) }) : t('historyTitle')}</h1>
+      <h1>
+        {st ? `${t('stocktakeOn', { date: formatDate(st.taken_on, lang) })} · ${stocktakeLabel(st, t, lang)}` : t('historyTitle')}
+      </h1>
       {st?.notes && <p className="notes">{st.notes}</p>}
       {!lines ? (
         <p className="muted">{t('loading')}</p>

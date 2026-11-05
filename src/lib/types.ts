@@ -45,6 +45,7 @@ export interface Stocktake {
   taken_on: string
   notes: string | null
   status: 'in_progress' | 'done'
+  locations: string[] | null
   created_at: string
   finished_at: string | null
 }

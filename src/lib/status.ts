@@ -88,6 +88,34 @@ export function nextStocktakeDate(lastDone: string | null, settings: Settings): 
   return addMonths(lastDone, settings.stocktake_interval_months)
 }
 
+// Does this stock-take count items in the given location?
+export function covers(st: { locations: string[] | null }, location: string): boolean {
+  return !st.locations || st.locations.length === 0 || st.locations.includes(location)
+}
+
+export interface AreaDue {
+  location: string
+  last: string | null
+  due: string | null
+}
+
+// Each location is due a set number of months after the last finished stock-take that counted it.
+export function areaDue(
+  stocktakes: { status: string; taken_on: string; locations: string[] | null }[],
+  locations: string[],
+  settings: Settings,
+): AreaDue[] {
+  return locations.map((location) => {
+    const last =
+      stocktakes
+        .filter((s) => s.status === 'done' && covers(s, location))
+        .map((s) => s.taken_on)
+        .sort()
+        .pop() ?? null
+    return { location, last, due: nextStocktakeDate(last, settings) }
+  })
+}
+
 export const LOCATION_ORDER = ['Garage', 'Kitchen', 'Freezer']
 
 export function locationRank(loc: string): number {

@@ -143,8 +143,9 @@ export async function deleteLink(id: string) {
 
 // ---------- stock-takes ----------
 
-export async function startStocktake() {
-  return check(await supabase.from('stocktakes').insert({ status: 'in_progress' }).select().single()) as Stocktake
+// locations: the areas to count, or null for every location.
+export async function startStocktake(locations: string[] | null = null) {
+  return check(await supabase.from('stocktakes').insert({ status: 'in_progress', locations }).select().single()) as Stocktake
 }
 
 export async function loadLines(stocktakeId: string) {
