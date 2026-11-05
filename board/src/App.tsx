@@ -8,7 +8,7 @@ import {
 import type { BoardSettings, NewsRegion, Quote, Snapshot, StockpileView, Weather, WhatsApp } from './data'
 import { ItemStateProvider, UndoBar } from './items'
 import { Card, Loading, Problem } from './ui'
-import { HKG, STOCKPILE_URL, VAN, ago, clock } from './format'
+import { HKG, STOCKPILE_URL, VAN, ago, clock, stockpileLink } from './format'
 import {
   CalendarDetail, CalendarSummary, InboxDetail, InboxSummary, MarketsDetail, MarketsSummary,
   NewsDetail, NewsSummary, SereneDetail, SereneSummary, StockDetail, StockSummary,
@@ -227,6 +227,10 @@ function Board({ session }: { session: Session }) {
             <div className="clock"><b>{clock(now, HKG)}</b><span>Hong Kong</span></div>
           </div>
           <div className="actions">
+            <nav className="app-switch" aria-label="Switch app">
+              <span className="here" aria-current="page">Morning Board <span className="tc">晨報</span></span>
+              <a href={stockpileLink('')}>Stockpile <span className="tc">儲備</span></a>
+            </nav>
             <button type="button" className="btn ghost" onClick={refreshAll}>Refresh</button>
             <button type="button" className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
           </div>

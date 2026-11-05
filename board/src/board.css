@@ -231,3 +231,15 @@ li:hover > .acts, li:focus-within > .acts, .mail-top:hover .acts, .acts:focus-wi
 .dl.urgent { border-left-color: var(--crit); } .dl.urgent b { color: var(--crit); }
 .dl.soon { border-left-color: var(--warn); } .dl.soon b { color: var(--warn); }
 .dl .acts { margin-left: 6px; }
+
+/* ---------- stockpile panel actions and app switcher ---------- */
+.sp-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.sp-actions .btn { text-decoration: none; display: inline-block; }
+.app-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; font-size: 0.85rem; }
+.app-switch a, .app-switch span { padding: 5px 12px; text-decoration: none; color: var(--fg); white-space: nowrap; }
+.app-switch .here { background: var(--accent); color: #131a22; font-weight: 600; }
+.app-switch a:hover { color: var(--accent); }
+.actions { flex-wrap: wrap; align-items: center; }
+.app-switch { align-self: center; }
+.app-switch a, .app-switch span.here { display: inline-flex; align-items: center; gap: 4px; line-height: 1.3; }
+@media (max-width: 640px) { .app-switch a, .app-switch span.here { padding: 5px 10px; } }

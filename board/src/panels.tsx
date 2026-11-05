@@ -9,7 +9,7 @@ import { HiddenNote, ItemActions } from './items'
 import { useVisible } from './itemHooks'
 import type { Deadline, WhatsApp } from './data'
 import {
-  STOCKPILE_URL, TEAM_TOOLS_URL, aqiText, ago, hourLabel, num, pct, shortDate, weekday, wxText, wxZh,
+  TEAM_TOOLS_URL, stockpileLink, aqiText, ago, hourLabel, num, pct, shortDate, weekday, wxText, wxZh,
 } from './format'
 const GMAIL_URL = 'https://mail.google.com/mail/u/0/#inbox'
 const CAL_URL = 'https://calendar.google.com/calendar/u/0/r/day'
@@ -560,28 +560,72 @@ export function MarketsDetail({ quotes, watch, onSave }: { quotes: Quote[]; watc
 }
 
 // ================================================================= Stockpile
+const AREA_ZH: Record<string, string> = { Garage: '車房', Kitchen: '廚房', Freezer: '冰櫃' }
+const areaName = (l: string) => `${l} ${AREA_ZH[l] ?? ''}`.trim()
+
+function areaState(a: StockpileView['areas'][number]): { sev: 'urgent' | 'soon' | 'info'; text: string } {
+  if (!a.due) return { sev: 'soon', text: 'not counted yet' }
+  const d = daysUntil(a.due)
+  if (d < 0) return { sev: 'urgent', text: `overdue by ${-d} days` }
+  return { sev: d <= 14 ? 'soon' : 'info', text: `due in ${d} days (${shortDate(a.due)})` }
+}
+
+// One-tap buttons that open the right screen in the Stockpile Tracker, in this tab.
+function StockActions({ sp }: { sp: StockpileView }) {
+  return (
+    <div className="sp-actions">
+      <a className="btn" href={stockpileLink('shopping')}>
+        Shopping list{sp.shopping.count ? ` (${sp.shopping.count})` : ''}
+      </a>
+      {sp.open ? (
+        <a className="btn ghost" href={stockpileLink('stocktake')}>Continue stock-take</a>
+      ) : (
+        sp.areas.map((a) => (
+          <a key={a.location} className="btn ghost" href={stockpileLink(`stocktake/${encodeURIComponent(a.location)}`)}>
+            Count {a.location}
+          </a>
+        ))
+      )}
+      <a className="btn ghost" href={stockpileLink('')}>Inventory</a>
+    </div>
+  )
+}
+
 export function StockSummary({ sp }: { sp: StockpileView }) {
-  const next = sp.nextStocktake ? daysUntil(sp.nextStocktake) : null
   return (
     <>
       <div className="stats">
         <div className="stat"><b className={sp.below.length ? 'warn' : ''}>{sp.below.length}</b><span>Below target</span></div>
         <div className="stat"><b className={sp.expiring.length ? 'crit' : ''}>{sp.expiring.length}</b><span>Expire in 30 days</span></div>
         <div className="stat"><b>{sp.empty.length}</b><span>Out of stock</span></div>
+        {sp.shopping.estTotal > 0 && <div className="stat"><b>${Math.round(sp.shopping.estTotal)}</b><span>To buy (estimate)</span></div>}
       </div>
       <ul className="rows">
-        <li>
-          <Sev s={next !== null && next <= 7 ? 'soon' : 'info'} label="Count" />
-          <span className="x">{sp.stocktakeInProgress ? 'Stock-take in progress' : next === null ? 'No stock-take done yet' : next < 0 ? `Stock-take overdue by ${-next} days` : `Next stock-take in ${next} days`}</span>
-        </li>
+        {sp.open ? (
+          <li>
+            <Sev s="soon" label="Count" />
+            <span className="x">Stock-take in progress{sp.open.label ? `: ${sp.open.label.join(', ')}` : ''} ({sp.open.done} of {sp.open.total} done)</span>
+          </li>
+        ) : (
+          sp.areas.map((a) => {
+            const st = areaState(a)
+            return (
+              <li key={a.location}>
+                <Sev s={st.sev} label={a.location} />
+                <span className="x">Stock-take {st.text}</span>
+              </li>
+            )
+          })
+        )}
       </ul>
+      <StockActions sp={sp} />
     </>
   )
 }
 
 export function StockDetail({ sp }: { sp: StockpileView }) {
   const name = (s: StockpileView['below'][number]) => (
-    <a href={`${STOCKPILE_URL}#/item/${s.item.id}`} target="_blank" rel="noreferrer">{s.item.name_en}</a>
+    <a href={stockpileLink(`item/${s.item.id}`)}>{s.item.name_en}</a>
   )
   return (
     <div className="detail-grid">
@@ -608,7 +652,24 @@ export function StockDetail({ sp }: { sp: StockpileView }) {
             {!sp.expiring.length && <tr><td colSpan={2} className="empty">Nothing expires soon.</td></tr>}
           </tbody>
         </table></div>
-        <p><a className="link" href={`${STOCKPILE_URL}#/shopping`} target="_blank" rel="noreferrer">Open shopping list in the Stockpile Tracker</a></p>
+      </section>
+      <section className="sub-panel">
+        <h3>Stock-take by area 按位置盤點</h3>
+        <ul className="rows">
+          {sp.areas.map((a) => {
+            const st = areaState(a)
+            return (
+              <li key={a.location}>
+                <Sev s={st.sev} label={a.location} />
+                <span className="x">{areaName(a.location)}: {st.text}{a.last ? ` · last counted ${shortDate(a.last)}` : ''}</span>
+              </li>
+            )
+          })}
+        </ul>
+        <p className="sub">
+          Shopping list: {sp.shopping.count} items{sp.shopping.estTotal > 0 ? `, about $${sp.shopping.estTotal.toFixed(0)}` : ''}.
+        </p>
+        <StockActions sp={sp} />
       </section>
     </div>
   )

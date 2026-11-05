@@ -1,0 +1,21 @@
+{
+  "name": "Morning Board and Stockpile",
+  "short_name": "Home",
+  "description": "Felix's Morning Board and household Stockpile Tracker",
+  "start_url": "./board/",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f161f",
+  "theme_color": "#162130",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Morning Board", "short_name": "Board", "url": "./board/", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Stockpile inventory", "short_name": "Inventory", "url": "./#/" },
+    { "name": "Shopping list", "short_name": "Shopping", "url": "./#/shopping" },
+    { "name": "Stock-take", "short_name": "Stock-take", "url": "./#/stocktake" }
+  ]
+}

@@ -1,6 +1,10 @@
 import type { Severity } from './data'
 
 export const STOCKPILE_URL = '../'
+// Link into the Stockpile Tracker in the same tab; "from=board" makes it show a way back.
+export function stockpileLink(path: string): string {
+  return `${STOCKPILE_URL}?from=board#/${path}`
+}
 export const TEAM_TOOLS_URL = 'https://serenehost.ca/team/'
 
 // ------------------------------------------------------------------ time
