@@ -203,7 +203,7 @@ export interface Quote {
 export interface Headline { title: string; link: string; source: string; published: string | null }
 export interface NewsRegion { key: string; label: string; items: Headline[] }
 
-async function feeds<T>(query: string): Promise<T> {
+export async function feeds<T>(query: string): Promise<T> {
   const base = import.meta.env.VITE_SUPABASE_URL as string
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string
   const { data } = await supabase.auth.getSession()

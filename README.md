@@ -105,3 +105,12 @@ sign-in link can return straight to the board.
   the last 14 days of wins and 0.1% notes, and Claude's weekly review.
 - Tables: `checkins` (one row per day) and `board_reviews` (one per week), owner only.
 - The weekly review is written on Sundays by a Claude desktop task: `board/REVIEW_TASK.md`.
+
+### Home page (`/board/#/home`)
+
+Private to the owner. Live alerts near the house (Environment Canada weather warnings,
+earthquakes from USGS, BC Hydro outages, tsunami bulletins) through `board-feeds?kind=alerts`,
+and one list of everything that becomes due: house maintenance, emergency plan, health
+check-ups, car service and insurance, bills and documents. "Done" moves a repeating item to
+its next date. Tables: `household` (the family profile, kept only in the database) and
+`home_items`. The morning summary includes Home items due within 7 days.

@@ -12,6 +12,9 @@ import { addDays, loadCheckins, loadReviews, vanDate, vanHour } from './me'
 import type { Checkin, Review } from './me'
 import { MePage } from './MePage'
 import { ReviewPage } from './ReviewPage'
+import { HomePage } from './HomePage'
+import { alertLines, dueState, loadAlerts, loadHomeItems, loadHousehold } from './home'
+import type { Alerts, HomeItem, Household } from './home'
 import { Card, Loading, Problem } from './ui'
 import { HKG, STOCKPILE_URL, VAN, ago, clock, stockpileLink } from './format'
 import {
@@ -169,6 +172,9 @@ function Board({ session }: { session: Session }) {
   const [wa, reloadWa] = useLoad(() => loadExtra<WhatsApp>('whatsapp'), [], true)
   const [ci, reloadCi] = useLoad<Checkin[]>(() => loadCheckins(addDays(vanDate(), -120)), [], true)
   const [rv, reloadRv] = useLoad<Review[]>(loadReviews, [], true)
+  const [hh, reloadHh] = useLoad<Household | null>(loadHousehold, [], true)
+  const [hi, reloadHi] = useLoad<HomeItem[]>(loadHomeItems, [], true)
+  const [al, reloadAl] = useLoad<Alerts>(loadAlerts, [], true)
   const watch = settings?.watchlist ?? []
   const [mk, reloadMk] = useLoad<Quote[]>(() => loadMarkets(watch), [JSON.stringify(watch)], settings !== null)
 
@@ -180,7 +186,7 @@ function Board({ session }: { session: Session }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [route])
 
-  const refreshAll = () => { reloadSnap(); reloadWx(); reloadNews(); reloadSp(); reloadMk(); reloadWa(); reloadCi(); reloadRv() }
+  const refreshAll = () => { reloadSnap(); reloadWx(); reloadNews(); reloadSp(); reloadMk(); reloadWa(); reloadCi(); reloadRv(); reloadHh(); reloadHi(); reloadAl() }
   const save = async (patch: Partial<BoardSettings>) => {
     await saveSettings(session.user.id, patch)
     setSettings((s) => (s ? { ...s, ...patch } : s))
@@ -225,7 +231,10 @@ function Board({ session }: { session: Session }) {
   }
 
   const panel = PANELS[route]
-  const page: 'today' | 'me' | 'review' = route === 'me' ? 'me' : route === 'review' ? 'review' : 'today'
+  const page: 'today' | 'me' | 'review' | 'home' = route === 'me' ? 'me' : route === 'review' ? 'review' : route === 'home' ? 'home' : 'today'
+  const alerts = al.data ? alertLines(al.data) : null
+  const loudAlerts = (alerts ?? []).filter((a) => a.severity !== 'info')
+  const homeDue = (hi.data ?? []).filter((i) => { const st = dueState(i, vanDate(now)).state; return st === 'overdue' || st === 'week' }).length
   const todayCi = ci.data?.find((c) => c.day === vanDate(now))
   const hourNow = vanHour(now)
   const needMorning = ci.data !== undefined && !todayCi?.morning_at && hourNow >= 5 && hourNow < 15
@@ -262,13 +271,24 @@ function Board({ session }: { session: Session }) {
         <a href="#/" className={page === 'today' ? 'on' : ''} aria-current={page === 'today' ? 'page' : undefined}>Today <span className="tc">今日</span></a>
         <a href="#/me" className={page === 'me' ? 'on' : ''} aria-current={page === 'me' ? 'page' : undefined}>Me <span className="tc">我</span>{(needMorning || needEvening) && <span className="badge" aria-label="Check-in waiting">1</span>}</a>
         <a href="#/review" className={page === 'review' ? 'on' : ''} aria-current={page === 'review' ? 'page' : undefined}>Review <span className="tc">回顧</span></a>
+        <a href="#/home" className={page === 'home' ? 'on' : ''} aria-current={page === 'home' ? 'page' : undefined}>Home <span className="tc">家</span>{(homeDue > 0 || loudAlerts.length > 0) && <span className="badge" aria-label="Home items need attention">{homeDue + loudAlerts.length}</span>}</a>
       </nav>
 
       {page === 'me' ? (
         settings ? wrap(ci, (d) => <MePage settings={settings} checkins={d} onReload={reloadCi} onSaveSettings={save} lang={lang} />) : <Loading />
+      ) : page === 'home' ? (
+        wrap(hi, (d) => <HomePage h={hh.data ?? null} items={d} alerts={alerts} alertsError={al.error ?? null} onReload={reloadHi} lang={lang} />)
       ) : page === 'review' ? (
         settings ? wrap(ci, (d) => <ReviewPage settings={settings} checkins={d} reviews={rv.data ?? []} lang={lang} />) : <Loading />
       ) : (<>
+      {loudAlerts.length > 0 && (
+        <a className="ci-banner alert-banner" href="#/home">
+          <b>{loudAlerts[0].title}</b>
+          <span className="tc">{loudAlerts[0].title_zh}</span>
+          {loudAlerts.length > 1 && <span className="sub inline">and {loudAlerts.length - 1} more</span>}
+          <span className="go">Home →</span>
+        </a>
+      )}
       {(needMorning || needEvening) && (
         <a className="ci-banner" href="#/me">
           <b>{needMorning ? 'Morning check-in, about 2 minutes' : 'Evening check-in, about 3 minutes'}</b>
