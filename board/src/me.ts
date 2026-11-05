@@ -1,0 +1,160 @@
+import { supabase } from '../../src/lib/supabase'
+import type { Area, Habit } from './data'
+
+// ------------------------------------------------------------------ check-ins
+// One row per Vancouver date. The check-ins are the record of what actually happened;
+// the calendar is only a plan.
+
+export interface Checkin {
+  day: string
+  sleep_hours: number | null
+  sleep_quality: number | null
+  energy_am: number | null
+  mood_am: number | null
+  priorities: string[]
+  morning_note: string
+  morning_at: string | null
+  energy_pm: number | null
+  mood_pm: number | null
+  priorities_done: boolean[]
+  habits: Record<string, boolean>
+  hours: Record<string, number>
+  win: string
+  slipped: string
+  better_tomorrow: string
+  evening_note: string
+  evening_at: string | null
+}
+
+export const emptyCheckin = (day: string): Checkin => ({
+  day, sleep_hours: null, sleep_quality: null, energy_am: null, mood_am: null, priorities: ['', '', ''],
+  morning_note: '', morning_at: null, energy_pm: null, mood_pm: null, priorities_done: [false, false, false],
+  habits: {}, hours: {}, win: '', slipped: '', better_tomorrow: '', evening_note: '', evening_at: null,
+})
+
+export async function loadCheckins(fromDay: string): Promise<Checkin[]> {
+  const { data, error } = await supabase.from('checkins').select('*').gte('day', fromDay).order('day')
+  if (error) throw error
+  return (data ?? []).map((r) => ({ ...emptyCheckin(r.day), ...r, sleep_hours: r.sleep_hours === null ? null : Number(r.sleep_hours) })) as Checkin[]
+}
+
+export async function saveCheckin(day: string, patch: Partial<Checkin>): Promise<void> {
+  const { error } = await supabase.from('checkins').upsert({ ...patch, day }, { onConflict: 'user_id,day' })
+  if (error) throw error
+}
+
+// ------------------------------------------------------------------ weekly reviews (written by Claude)
+export interface Review {
+  week_start: string
+  created_at: string
+  data: {
+    points: string[]; points_zh: string[]
+    went_well?: string[]; went_well_zh?: string[]
+    slipped?: string[]; slipped_zh?: string[]
+    suggestions: string[]; suggestions_zh: string[]
+    focus?: string; focus_zh?: string
+  }
+}
+
+export async function loadReviews(): Promise<Review[]> {
+  const { data, error } = await supabase.from('board_reviews').select('week_start, created_at, data').order('week_start', { ascending: false }).limit(12)
+  if (error) throw error
+  return data as Review[]
+}
+
+// ------------------------------------------------------------------ dates (Vancouver)
+const VAN = 'America/Vancouver'
+export const vanDate = (d = new Date()) => d.toLocaleDateString('en-CA', { timeZone: VAN })
+export const vanHour = (d = new Date()) => Number(d.toLocaleTimeString('en-GB', { hour: '2-digit', hour12: false, timeZone: VAN }).slice(0, 2))
+
+export function addDays(day: string, n: number): string {
+  const d = new Date(day + 'T12:00:00Z')
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+export function daysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(b + 'T12:00:00Z') - Date.parse(a + 'T12:00:00Z')) / 86400000)
+}
+
+/** Monday of the week that holds this day. */
+export function weekStart(day: string): string {
+  const dow = new Date(day + 'T12:00:00Z').getUTCDay() // 0 = Sunday
+  return addDays(day, dow === 0 ? -6 : 1 - dow)
+}
+
+// ------------------------------------------------------------------ habits
+export type DayMark = 'done' | 'missed' | 'unknown' | 'today'
+
+export interface HabitStatus {
+  habit: Habit
+  grid: { day: string; mark: DayMark }[] // last 28 days, oldest first
+  streak: number // daily habits: days in a row; weekly habits: weeks in a row on target
+  thisWeek: number
+  warning: string | null
+  warning_zh: string | null
+}
+
+export function habitStatus(habit: Habit, byDay: Map<string, Checkin>, today: string): HabitStatus {
+  const markOf = (day: string): DayMark => {
+    const c = byDay.get(day)
+    if (c?.habits[habit.key]) return 'done'
+    if (day === today) return 'today'
+    if (!c?.evening_at) return 'unknown'
+    return 'missed'
+  }
+  const grid = Array.from({ length: 28 }, (_, i) => addDays(today, i - 27)).map((day) => ({ day, mark: markOf(day) }))
+  const ws = weekStart(today)
+  const thisWeek = grid.filter((g) => g.day >= ws && g.mark === 'done').length
+  let streak = 0
+  let warning: string | null = null
+  let warning_zh: string | null = null
+
+  if (habit.per_week >= 7) {
+    // Count back from yesterday (today still counts if already done).
+    let d = markOf(today) === 'done' ? today : addDays(today, -1)
+    while (markOf(d) === 'done' && streak < 1000) { streak++; d = addDays(d, -1) }
+    const y = markOf(addDays(today, -1))
+    const y2 = markOf(addDays(today, -2))
+    if (markOf(today) !== 'done') {
+      if (y !== 'done' && y2 !== 'done') { warning = 'Missed 2 days. Start again today.'; warning_zh = '已經兩日未做，今日重新開始。' }
+      else if (y !== 'done') { warning = 'Missed yesterday. Do not miss twice.'; warning_zh = '昨日未做，今日不要再錯過。' }
+    }
+  } else {
+    // Weekly target: count full past weeks that met the target.
+    let w = addDays(ws, -7)
+    for (let i = 0; i < 52; i++) {
+      let n = 0
+      for (let k = 0; k < 7; k++) if (markOf(addDays(w, k)) === 'done') n++
+      if (n >= habit.per_week) { streak++; w = addDays(w, -7) } else break
+    }
+    const daysLeft = 7 - daysBetween(ws, today) // including today
+    const need = habit.per_week - thisWeek
+    if (need > 0 && need >= daysLeft) {
+      warning = need > daysLeft ? `Target out of reach this week (${thisWeek}/${habit.per_week}).` : `Needs every remaining day this week (${thisWeek}/${habit.per_week}).`
+      warning_zh = need > daysLeft ? `本週已難達標（${thisWeek}/${habit.per_week}）。` : `本週餘下每日都要做（${thisWeek}/${habit.per_week}）。`
+    }
+  }
+  return { habit, grid, streak, thisWeek, warning, warning_zh }
+}
+
+// ------------------------------------------------------------------ time by life area
+export function hoursByArea(areas: Area[], checkins: Checkin[], from: string, to: string): { area: Area; hours: number }[] {
+  return areas.map((area) => ({
+    area,
+    hours: checkins.filter((c) => c.day >= from && c.day <= to).reduce((s, c) => s + (Number(c.hours[area.key]) || 0), 0),
+  }))
+}
+
+export const avg = (xs: (number | null | undefined)[]): number | null => {
+  const v = xs.filter((x): x is number => typeof x === 'number' && Number.isFinite(x))
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null
+}
+
+export function slugKey(label: string, taken: string[]): string {
+  const base = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'item'
+  let k = base
+  let i = 2
+  while (taken.includes(k)) k = `${base}_${i++}`
+  return k
+}

@@ -8,6 +8,10 @@ import {
 } from './data'
 import type { BoardSettings, NewsRegion, Quote, Snapshot, StockpileView, Weather, WhatsApp } from './data'
 import { ItemStateProvider, UndoBar } from './items'
+import { addDays, loadCheckins, loadReviews, vanDate, vanHour } from './me'
+import type { Checkin, Review } from './me'
+import { MePage } from './MePage'
+import { ReviewPage } from './ReviewPage'
 import { Card, Loading, Problem } from './ui'
 import { HKG, STOCKPILE_URL, VAN, ago, clock, stockpileLink } from './format'
 import {
@@ -163,18 +167,20 @@ function Board({ session }: { session: Session }) {
   const [news, reloadNews] = useLoad<NewsRegion[]>(loadNews, [], true)
   const [sp, reloadSp] = useLoad<StockpileView | null>(loadStockpile, [], true)
   const [wa, reloadWa] = useLoad(() => loadExtra<WhatsApp>('whatsapp'), [], true)
+  const [ci, reloadCi] = useLoad<Checkin[]>(() => loadCheckins(addDays(vanDate(), -120)), [], true)
+  const [rv, reloadRv] = useLoad<Review[]>(loadReviews, [], true)
   const watch = settings?.watchlist ?? []
   const [mk, reloadMk] = useLoad<Quote[]>(() => loadMarkets(watch), [JSON.stringify(watch)], settings !== null)
 
   useEffect(() => { loadSettings().then(setSettings, () => setSettings(null)) }, [])
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && route) home() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && PANELS[route]) home() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [route])
 
-  const refreshAll = () => { reloadSnap(); reloadWx(); reloadNews(); reloadSp(); reloadMk(); reloadWa() }
+  const refreshAll = () => { reloadSnap(); reloadWx(); reloadNews(); reloadSp(); reloadMk(); reloadWa(); reloadCi(); reloadRv() }
   const save = async (patch: Partial<BoardSettings>) => {
     await saveSettings(session.user.id, patch)
     setSettings((s) => (s ? { ...s, ...patch } : s))
@@ -219,6 +225,11 @@ function Board({ session }: { session: Session }) {
   }
 
   const panel = PANELS[route]
+  const page: 'today' | 'me' | 'review' = route === 'me' ? 'me' : route === 'review' ? 'review' : 'today'
+  const todayCi = ci.data?.find((c) => c.day === vanDate(now))
+  const hourNow = vanHour(now)
+  const needMorning = ci.data !== undefined && !todayCi?.morning_at && hourNow >= 5 && hourNow < 15
+  const needEvening = ci.data !== undefined && !todayCi?.evening_at && hourNow >= 18
 
   return (
     <div className="app">
@@ -246,6 +257,25 @@ function Board({ session }: { session: Session }) {
           </div>
         </div>
       </header>
+
+      <nav className="pages" aria-label="Pages">
+        <a href="#/" className={page === 'today' ? 'on' : ''} aria-current={page === 'today' ? 'page' : undefined}>Today <span className="tc">今日</span></a>
+        <a href="#/me" className={page === 'me' ? 'on' : ''} aria-current={page === 'me' ? 'page' : undefined}>Me <span className="tc">我</span>{(needMorning || needEvening) && <span className="badge" aria-label="Check-in waiting">1</span>}</a>
+        <a href="#/review" className={page === 'review' ? 'on' : ''} aria-current={page === 'review' ? 'page' : undefined}>Review <span className="tc">回顧</span></a>
+      </nav>
+
+      {page === 'me' ? (
+        settings ? wrap(ci, (d) => <MePage settings={settings} checkins={d} onReload={reloadCi} onSaveSettings={save} lang={lang} />) : <Loading />
+      ) : page === 'review' ? (
+        settings ? wrap(ci, (d) => <ReviewPage settings={settings} checkins={d} reviews={rv.data ?? []} lang={lang} />) : <Loading />
+      ) : (<>
+      {(needMorning || needEvening) && (
+        <a className="ci-banner" href="#/me">
+          <b>{needMorning ? 'Morning check-in, about 2 minutes' : 'Evening check-in, about 3 minutes'}</b>
+          <span className="tc">{needMorning ? '早上記錄：睡眠、精神、今日三件要事' : '晚上記錄：習慣、時間、今日小勝利'}</span>
+          <span className="go">Start →</span>
+        </a>
+      )}
 
       <section className="strip">
         <div className="overview">
@@ -306,6 +336,7 @@ function Board({ session }: { session: Session }) {
           ])}
         </main>
       )}
+      </>)}
       <UndoBar />
       <footer className="foot">
         Weather: Open-Meteo · Markets: Yahoo Finance, may be delayed · News: CBC, Global News, RTHK, SCMP, New York Times, BBC · Summary written by Claude from Gmail, Google Calendar, SereneHost and WhatsApp.

@@ -92,3 +92,16 @@ tasks), all owner only. The morning task also writes a 14-day deadlines strip, a
 Optional: in Supabase, Authentication, URL Configuration, add
 `https://drfelixtang-png.github.io/Home-Improvement/board/` to Redirect URLs so the
 sign-in link can return straight to the board.
+
+### Me and Review pages (`/board/#/me`, `/board/#/review`)
+
+- **Me (我):** morning check-in (sleep, energy, mood, top 3 priorities) and evening
+  check-in (priorities and habits done, hours per life area, energy, mood, one win, what
+  slipped, one 0.1% improvement for tomorrow). Habit streaks with the "never miss twice"
+  rule, and time per life area against weekly targets. Habits, areas and targets are
+  editable on the page. The check-ins are the record of what happened; the calendar is
+  only a plan.
+- **Review (回顧):** this week against last week, a 30-day energy, mood and sleep chart,
+  the last 14 days of wins and 0.1% notes, and Claude's weekly review.
+- Tables: `checkins` (one row per day) and `board_reviews` (one per week), owner only.
+- The weekly review is written on Sundays by a Claude desktop task: `board/REVIEW_TASK.md`.
