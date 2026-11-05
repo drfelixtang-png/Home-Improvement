@@ -8,6 +8,8 @@ import type { Area, Habit } from './data'
 export interface Checkin {
   day: string
   sleep_hours: number | null
+  bed_time: string | null // 'HH:MM', the night before
+  wake_time: string | null // 'HH:MM'
   sleep_quality: number | null
   energy_am: number | null
   mood_am: number | null
@@ -27,7 +29,7 @@ export interface Checkin {
 }
 
 export const emptyCheckin = (day: string): Checkin => ({
-  day, sleep_hours: null, sleep_quality: null, energy_am: null, mood_am: null, priorities: ['', '', ''],
+  day, sleep_hours: null, bed_time: null, wake_time: null, sleep_quality: null, energy_am: null, mood_am: null, priorities: ['', '', ''],
   morning_note: '', morning_at: null, energy_pm: null, mood_pm: null, priorities_done: [false, false, false],
   habits: {}, hours: {}, win: '', slipped: '', better_tomorrow: '', evening_note: '', evening_at: null,
 })
@@ -35,7 +37,7 @@ export const emptyCheckin = (day: string): Checkin => ({
 export async function loadCheckins(fromDay: string): Promise<Checkin[]> {
   const { data, error } = await supabase.from('checkins').select('*').gte('day', fromDay).order('day')
   if (error) throw error
-  return (data ?? []).map((r) => ({ ...emptyCheckin(r.day), ...r, sleep_hours: r.sleep_hours === null ? null : Number(r.sleep_hours) })) as Checkin[]
+  return (data ?? []).map((r) => ({ ...emptyCheckin(r.day), ...r, sleep_hours: r.sleep_hours === null ? null : Number(r.sleep_hours), bed_time: r.bed_time ? String(r.bed_time).slice(0, 5) : null, wake_time: r.wake_time ? String(r.wake_time).slice(0, 5) : null })) as Checkin[]
 }
 
 export async function saveCheckin(day: string, patch: Partial<Checkin>): Promise<void> {
@@ -157,4 +159,14 @@ export function slugKey(label: string, taken: string[]): string {
   let i = 2
   while (taken.includes(k)) k = `${base}_${i++}`
   return k
+}
+
+/** Hours asleep from bed time (the night before) to wake-up time; crosses midnight. */
+export function sleepFrom(bed: string | null, wake: string | null): number | null {
+  if (!bed || !wake) return null
+  const [bh, bm] = bed.split(':').map(Number)
+  const [wh, wm] = wake.split(':').map(Number)
+  let mins = wh * 60 + wm - (bh * 60 + bm)
+  if (mins <= 0) mins += 24 * 60
+  return Math.round((mins / 60) * 4) / 4 // nearest quarter hour
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Area, BoardSettings, Habit } from './data'
 import type { Checkin } from './me'
-import { addDays, daysBetween, emptyCheckin, habitStatus, hoursByArea, saveCheckin, slugKey, vanDate, vanHour, weekStart } from './me'
+import { addDays, daysBetween, emptyCheckin, habitStatus, hoursByArea, saveCheckin, sleepFrom, slugKey, vanDate, vanHour, weekStart } from './me'
 
 type Lang = 'zh' | 'en'
 
@@ -49,7 +49,7 @@ function Morning({ day, c, prev, onSaved }: { day: string; c: Checkin; prev: Che
     setMsg('Saving…')
     try {
       await saveCheckin(day, {
-        sleep_hours: f.sleep_hours, sleep_quality: f.sleep_quality, energy_am: f.energy_am, mood_am: f.mood_am,
+        bed_time: f.bed_time, wake_time: f.wake_time, sleep_hours: sleepFrom(f.bed_time, f.wake_time) ?? f.sleep_hours, sleep_quality: f.sleep_quality, energy_am: f.energy_am, mood_am: f.mood_am,
         priorities: pr.map((p) => p.trim()), morning_note: f.morning_note, morning_at: new Date().toISOString(),
       })
       setMsg('Saved 已儲存')
@@ -61,8 +61,12 @@ function Morning({ day, c, prev, onSaved }: { day: string; c: Checkin; prev: Che
       <h3>Morning check-in <span className="tc">早上記錄</span>{c.morning_at && <span className="done-chip">Done ✓</span>}</h3>
       {prev?.better_tomorrow && <p className="carry"><span className="lbl">Yesterday you said 昨日的 0.1%</span>{prev.better_tomorrow}</p>}
       <div className="field">
-        <label className="field-l" htmlFor="sleep">Sleep last night, hours 睡眠時數</label>
-        <Stepper id="sleep" value={f.sleep_hours ?? 0} onChange={(v) => setF({ ...f, sleep_hours: v })} />
+        <span className="field-l">Sleep last night 昨晚睡眠</span>
+        <div className="sleep-times">
+          <label htmlFor="bed">Went to bed 上床<input id="bed" type="time" value={f.bed_time ?? ''} onChange={(e) => setF({ ...f, bed_time: e.target.value || null })} /></label>
+          <label htmlFor="wake">Woke up 起床<input id="wake" type="time" value={f.wake_time ?? ''} onChange={(e) => setF({ ...f, wake_time: e.target.value || null })} /></label>
+          <span className="sleep-total">{sleepFrom(f.bed_time, f.wake_time) !== null ? <><b>{sleepFrom(f.bed_time, f.wake_time)}</b> h</> : <span className="sub inline">hours worked out for you</span>}</span>
+        </div>
       </div>
       <Rating id="sq" label="Sleep quality 睡眠質素" value={f.sleep_quality} onChange={(v) => setF({ ...f, sleep_quality: v })} low="Poor" high="Great" />
       <Rating id="eam" label="Energy now 精神" value={f.energy_am} onChange={(v) => setF({ ...f, energy_am: v })} low="Drained" high="Full" />
