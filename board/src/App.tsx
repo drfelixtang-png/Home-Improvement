@@ -13,6 +13,9 @@ import type { Checkin, Review } from './me'
 import { MePage } from './MePage'
 import { ReviewPage } from './ReviewPage'
 import { HomePage } from './HomePage'
+import { FinancePage } from './FinancePage'
+import { loadFinance, loadFx } from './finance'
+import type { Finance, Fx } from './finance'
 import { alertLines, dueState, loadAlerts, loadHomeItems, loadHousehold } from './home'
 import type { Alerts, HomeItem, Household } from './home'
 import { Card, Loading, Problem } from './ui'
@@ -175,6 +178,11 @@ function Board({ session }: { session: Session }) {
   const [hh, reloadHh] = useLoad<Household | null>(loadHousehold, [], true)
   const [hi, reloadHi] = useLoad<HomeItem[]>(loadHomeItems, [], true)
   const [al, reloadAl] = useLoad<Alerts>(loadAlerts, [], true)
+  // Finance figures load only once the Finance page is opened.
+  const [finSeen, setFinSeen] = useState(route === 'finance')
+  useEffect(() => { if (route === 'finance') setFinSeen(true) }, [route])
+  const [fin, reloadFin] = useLoad<Finance>(loadFinance, [], finSeen)
+  const [fx, reloadFx] = useLoad<Fx>(loadFx, [], finSeen)
   const watch = settings?.watchlist ?? []
   const [mk, reloadMk] = useLoad<Quote[]>(() => loadMarkets(watch), [JSON.stringify(watch)], settings !== null)
 
@@ -186,7 +194,7 @@ function Board({ session }: { session: Session }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [route])
 
-  const refreshAll = () => { reloadSnap(); reloadWx(); reloadNews(); reloadSp(); reloadMk(); reloadWa(); reloadCi(); reloadRv(); reloadHh(); reloadHi(); reloadAl() }
+  const refreshAll = () => { reloadSnap(); reloadWx(); reloadNews(); reloadSp(); reloadMk(); reloadWa(); reloadCi(); reloadRv(); reloadHh(); reloadHi(); reloadAl(); if (finSeen) { reloadFin(); reloadFx() } }
   const save = async (patch: Partial<BoardSettings>) => {
     await saveSettings(session.user.id, patch)
     setSettings((s) => (s ? { ...s, ...patch } : s))
@@ -231,7 +239,8 @@ function Board({ session }: { session: Session }) {
   }
 
   const panel = PANELS[route]
-  const page: 'today' | 'me' | 'review' | 'home' = route === 'me' ? 'me' : route === 'review' ? 'review' : route === 'home' ? 'home' : 'today'
+  const page: 'today' | 'me' | 'review' | 'home' | 'finance' =
+    route === 'me' ? 'me' : route === 'review' ? 'review' : route === 'home' ? 'home' : route === 'finance' ? 'finance' : 'today'
   const alerts = al.data ? alertLines(al.data) : null
   const loudAlerts = (alerts ?? []).filter((a) => a.severity !== 'info')
   const homeDue = (hi.data ?? []).filter((i) => { const st = dueState(i, vanDate(now)).state; return st === 'overdue' || st === 'week' }).length
@@ -272,9 +281,14 @@ function Board({ session }: { session: Session }) {
         <a href="#/me" className={page === 'me' ? 'on' : ''} aria-current={page === 'me' ? 'page' : undefined}>Me <span className="tc">我</span>{(needMorning || needEvening) && <span className="badge" aria-label="Check-in waiting">1</span>}</a>
         <a href="#/review" className={page === 'review' ? 'on' : ''} aria-current={page === 'review' ? 'page' : undefined}>Review <span className="tc">回顧</span></a>
         <a href="#/home" className={page === 'home' ? 'on' : ''} aria-current={page === 'home' ? 'page' : undefined}>Home <span className="tc">家</span>{(homeDue > 0 || loudAlerts.length > 0) && <span className="badge" aria-label="Home items need attention">{homeDue + loudAlerts.length}</span>}</a>
+        <a href="#/finance" className={page === 'finance' ? 'on' : ''} aria-current={page === 'finance' ? 'page' : undefined}>Finance <span className="tc">財務</span></a>
       </nav>
 
-      {page === 'me' ? (
+      {page === 'finance' ? (
+        fin.error ? <Problem msg={fin.error} /> : fin.data === undefined || fx.data === undefined ? <Loading /> : (
+          <FinancePage f={fin.data} fx={fx.data} userId={session.user.id} onReload={reloadFin} lang={lang} />
+        )
+      ) : page === 'me' ? (
         settings ? wrap(ci, (d) => <MePage settings={settings} checkins={d} onReload={reloadCi} onSaveSettings={save} lang={lang} />) : <Loading />
       ) : page === 'home' ? (
         wrap(hi, (d) => <HomePage h={hh.data ?? null} items={d} alerts={alerts} alertsError={al.error ?? null} onReload={reloadHi} lang={lang} />)
