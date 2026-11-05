@@ -1,0 +1,397 @@
+/* Shared look with the Morning Board ("Night Desk"): dark navy, amber accent, thin dividers,
+   IBM Plex Sans with monospaced numbers, Noto Serif TC for Chinese. Loaded after styles.css,
+   so it only restyles; layout rules stay in styles.css. */
+
+:root,
+:root:not([data-theme='light']) {
+  --bg: #0f161f;
+  --surface: #162130;
+  --surface-2: #1b2839;
+  --text: #dfe6ee;
+  --muted: #8796a8;
+  --border: #243246;
+  --brand: #f0b44c;
+  --brand-text: #131a22;
+  --green: #5fcf8f;
+  --green-bg: #1c3327;
+  --yellow: #f0b44c;
+  --yellow-bg: #3a2e17;
+  --red: #ff7a6b;
+  --red-bg: #3a1f22;
+  --chip: #223044;
+  --radius: 4px;
+  --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --tc: 'Noto Serif TC', 'PingFang TC', 'Microsoft JhengHei', serif;
+  color-scheme: dark;
+  font-family: var(--sans);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f161f;
+    --surface: #162130;
+    --text: #dfe6ee;
+    --muted: #8796a8;
+    --border: #243246;
+    --brand: #f0b44c;
+    --green: #5fcf8f;
+    --green-bg: #1c3327;
+    --yellow: #f0b44c;
+    --yellow-bg: #3a2e17;
+    --red: #ff7a6b;
+    --red-bg: #3a1f22;
+    color-scheme: dark;
+  }
+}
+
+body {
+  font-family: var(--sans);
+  font-size: 15px;
+}
+:lang(zh-Hant),
+[lang='zh-Hant'] {
+  font-family: var(--sans), var(--tc);
+}
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+a:hover {
+  color: var(--brand);
+}
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Numbers in the board's monospaced face */
+.qty-text,
+.item-no,
+.price-stats dd,
+.progress span,
+.target-input input {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- header: like the board's top bar, no green block ---------- */
+.header {
+  background: var(--bg);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.lang {
+  border-color: var(--border);
+  color: var(--text);
+  min-height: 34px;
+  font-size: 0.85rem;
+}
+.lang:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.nav a {
+  color: var(--muted);
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  padding: 5px 10px;
+  font-size: 0.9rem;
+  opacity: 1;
+}
+.nav a:hover {
+  color: var(--brand);
+}
+.nav a.active {
+  background: transparent;
+  color: var(--brand);
+  border-color: var(--border);
+  font-weight: 600;
+}
+
+/* App switcher: same pill as on the board */
+.app-switch {
+  border-color: var(--border);
+}
+.app-switch .here {
+  background: var(--brand);
+  color: var(--brand-text);
+}
+.app-switch a:hover {
+  background: transparent;
+  color: var(--brand);
+}
+
+/* ---------- surfaces ---------- */
+.card,
+.item-row,
+.batch,
+.shop-list li,
+.record-list li,
+.price-stats div,
+.modal,
+.progress,
+.inline-form {
+  border-radius: var(--radius);
+}
+.card {
+  background: var(--surface);
+  border-color: var(--border);
+}
+.items {
+  background: var(--surface);
+}
+.items-head {
+  background: var(--surface-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+}
+.loc-heading,
+h2 {
+  border-color: var(--border);
+}
+.loc-heading {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.notes {
+  background: var(--surface-2);
+}
+
+/* Status rows: thin coloured edge and a faint tint, as on the board */
+.item-row {
+  border-color: var(--border);
+  border-left-width: 3px;
+}
+.item-row.status-yellow {
+  background: linear-gradient(90deg, rgba(240, 180, 76, 0.08), var(--surface) 45%);
+}
+.item-row.status-red {
+  background: linear-gradient(90deg, rgba(255, 122, 107, 0.08), var(--surface) 45%);
+}
+.card.status-green,
+.card.status-yellow,
+.card.status-red {
+  border-top-width: 3px;
+}
+
+/* ---------- controls ---------- */
+button {
+  border-radius: var(--radius);
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+  font-weight: 500;
+}
+button:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+button.primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-text);
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) {
+  color: var(--brand-text);
+  filter: brightness(1.08);
+}
+button.danger {
+  color: var(--red);
+}
+input,
+select,
+textarea {
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+  color-scheme: dark;
+}
+input::placeholder {
+  color: var(--muted);
+}
+.step-btn {
+  border-radius: 50%;
+}
+.x-btn {
+  border-radius: var(--radius);
+}
+.segmented button.on {
+  background: var(--brand);
+  color: var(--brand-text);
+  border-color: var(--brand);
+}
+
+/* Chips and tags like the board's severity labels */
+.chip {
+  border-radius: 3px;
+  background: var(--surface);
+}
+.tag {
+  border-radius: 3px;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.tag-pr-essential {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+.tag-pr-important {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.tag-pr-nice {
+  background: var(--chip);
+  border-color: var(--chip);
+}
+.tag-sr-stock_up {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.tag-sr-keep {
+  background: var(--chip);
+  border-color: var(--chip);
+}
+.tag-sr-no_overstock {
+  background: var(--yellow-bg);
+  color: var(--yellow);
+}
+.tag-kind {
+  background: var(--red-bg);
+  color: var(--red);
+}
+.tag-good,
+.badge {
+  border-radius: 3px;
+}
+
+/* Banners: the board's strip with a coloured left edge */
+.banner {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  background: var(--surface);
+  font-weight: 500;
+}
+.banner-green {
+  border-left-color: var(--green);
+  color: var(--text);
+}
+.banner-yellow {
+  border-left-color: var(--yellow);
+  color: var(--text);
+}
+.banner-red {
+  border-left-color: var(--red);
+  color: var(--red);
+}
+.area-dates {
+  color: var(--muted);
+}
+
+.highlight {
+  color: var(--brand);
+  font-weight: 500;
+}
+.item-highlight {
+  color: var(--text);
+  opacity: 0.85;
+}
+.shop-qty {
+  color: var(--brand);
+}
+.progress-bar {
+  background: rgba(240, 180, 76, 0.22);
+}
+.area-choice.suggested {
+  outline-color: var(--brand);
+}
+.item-row.changed {
+  outline-color: var(--brand);
+}
+.item-row.changed .target-input input {
+  border-color: var(--brand);
+  background: var(--yellow-bg);
+}
+
+/* Floating bars */
+.undo-bar {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+}
+.undo-bar button {
+  color: var(--brand);
+  border-color: var(--brand);
+}
+.save-bar {
+  background: var(--surface);
+  border-top-color: var(--brand);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
+}
+.modal-backdrop {
+  background: rgba(5, 9, 14, 0.7);
+}
+.modal {
+  border: 1px solid var(--border);
+}
+
+/* Print stays black on white */
+@media print {
+  :root,
+  :root:not([data-theme='light']) {
+    --bg: #fff;
+    --surface: #fff;
+    --surface-2: #fff;
+    --text: #000;
+    --muted: #444;
+    --border: #ccc;
+    color-scheme: light;
+  }
+}
+
+/* Checkboxes in the accent colour */
+input[type='checkbox'] {
+  accent-color: var(--brand);
+  background: transparent;
+}
+
+/* Phone: the header scrolls away like the board's, and the language button is compact */
+@media (max-width: 639px) {
+  .header {
+    position: static;
+  }
+  .header-top {
+    row-gap: 6px;
+  }
+  .brand {
+    flex: 1 1 auto;
+  }
+  .lang {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 0.8rem;
+  }
+  .nav a {
+    padding: 4px 9px;
+    font-size: 0.85rem;
+  }
+}
