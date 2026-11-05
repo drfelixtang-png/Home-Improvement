@@ -3,11 +3,11 @@ import type { FormEvent, ReactNode } from 'react'
 import { shortDate } from './format'
 import { vanDate } from './me'
 import {
-  accountAmount, addIe, addMonth, holdingPrice, holdingsOf, ieYears, latestBalances, mix, monthly, monthsBack, netWorth,
+  accountAmount, updateTransactions, addIe, addMonth, holdingPrice, holdingsOf, ieYears, latestBalances, mix, monthly, monthsBack, netWorth,
   saveBalances, saveFinSettings, saveHolding,
   sumMap, toCad, updateProperty, yearLines,
 } from './finance'
-import type { AccountKind, Cur, Finance, FinAccount, FinHolding, FinProperty, Fx } from './finance'
+import type { AccountKind, Cur, Finance, FinAccount, FinHolding, FinProperty, FinTransaction, Fx, TxKind } from './finance'
 
 type Lang = 'zh' | 'en'
 
@@ -305,6 +305,116 @@ function Holdings({ f, a, fx, show, userId, onDone }: { f: Finance; a: FinAccoun
   )
 }
 
+// ================================================================= bank statements
+const KIND_LABEL: Record<TxKind, string> = { income: 'Income', expense: 'Spending', transfer: 'Own transfer', capital: 'One-time' }
+const CAPITAL_LINES = ['Large deposit', 'Large cheque', 'Large cash withdrawal', 'Mortgage payout', 'Investment trades']
+
+function categories(f: Finance): { value: string; label: string }[] {
+  const used = (k: TxKind) => [...new Set([...f.transactions.filter((t) => t.kind === k).map((t) => t.line), ...(k === 'income' ? f.settings.income_lines ?? [] : k === 'expense' ? f.settings.expense_lines ?? [] : [])])].sort()
+  return [
+    ...used('expense').map((l) => ({ value: `expense|${l}`, label: `Spending: ${l}` })),
+    ...used('income').map((l) => ({ value: `income|${l}`, label: `Income: ${l}` })),
+    { value: 'transfer|Transfer', label: 'Own transfer, not counted' },
+    ...CAPITAL_LINES.map((l) => ({ value: `capital|${l}`, label: `One-time, not counted: ${l}` })),
+  ]
+}
+
+function ReviewRow({ t, f, show, cats, onDone }: { t: FinTransaction; f: Finance; show: boolean; cats: { value: string; label: string }[]; onDone: () => void }) {
+  const [v, setV] = useState(`${t.kind}|${t.line}`)
+  const [all, setAll] = useState(true)
+  const [msg, setMsg] = useState<string | null>(null)
+  const similar = f.transactions.filter((x) => !x.reviewed && x.id !== t.id && x.description === t.description)
+  const save = async () => {
+    const [kind, ...rest] = v.split('|')
+    setMsg('Saving…')
+    try {
+      await updateTransactions([t.id, ...(all ? similar.map((x) => x.id) : [])], { kind: kind as TxKind, line: rest.join('|'), reviewed: true })
+      setMsg(null); onDone()
+    } catch (e) { setMsg(`Could not save: ${(e as Error).message}`) }
+  }
+  return (
+    <tr>
+      <td className="mono">{t.posted_on}</td>
+      <td>{t.description}<span className="sub">{t.account}</span></td>
+      <td className={`n ${t.amount < 0 ? 'dn' : 'up'}`}>{show ? orig(t.amount, t.currency) : '••••'}</td>
+      <td>
+        <select className="fin-cat" value={v} onChange={(e) => setV(e.target.value)} aria-label={`Category for ${t.description} on ${t.posted_on}`}>
+          {!cats.some((c) => c.value === v) && <option value={v}>{v.replace('|', ': ')}</option>}
+          {cats.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+        </select>
+        {similar.length > 0 && <label className="sub fin-similar"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Also the {similar.length} other &quot;{t.description}&quot;</label>}
+        {msg && <span className="sub" role="status">{msg}</span>}
+      </td>
+      <td><button type="button" className="act" onClick={save}>Confirm</button></td>
+    </tr>
+  )
+}
+
+function Statements({ f, fx, show, onDone }: { f: Finance; fx: Fx; show: boolean; onDone: () => void }) {
+  const tx = f.transactions
+  const months = [...new Set(tx.map((t) => t.posted_on.slice(0, 7)))].sort().reverse()
+  const [month, setMonth] = useState(months[0] ?? '')
+  const [view, setView] = useState<'review' | 'month' | 'capital'>('review')
+  const cats = useMemo(() => categories(f), [f])
+  if (!tx.length) return null
+  const review = tx.filter((t) => !t.reviewed).sort((a, b) => b.posted_on.localeCompare(a.posted_on))
+  const capital = tx.filter((t) => t.kind === 'capital').sort((a, b) => b.posted_on.localeCompare(a.posted_on))
+  const inMonth = tx.filter((t) => t.posted_on.startsWith(month)).sort((a, b) => a.posted_on.localeCompare(b.posted_on))
+  const sum = (k: TxKind) => inMonth.filter((t) => t.kind === k).reduce((s, t) => s + toCad(t.amount, t.currency, fx), 0)
+  const M = (v: number) => (show ? money(v) : '••••')
+  return (
+    <section className="sub-panel span-2">
+      <h3>Bank statements 銀行月結單 <span className="sub inline">{tx.length} transactions, {months[months.length - 1]} to {months[0]}</span></h3>
+      <div className="fin-view" role="group" aria-label="Statement view">
+        <button type="button" className={view === 'review' ? 'on' : ''} aria-pressed={view === 'review'} onClick={() => setView('review')}>To review ({review.length})</button>
+        <button type="button" className={view === 'month' ? 'on' : ''} aria-pressed={view === 'month'} onClick={() => setView('month')}>By month</button>
+        <button type="button" className={view === 'capital' ? 'on' : ''} aria-pressed={view === 'capital'} onClick={() => setView('capital')}>Large one-time moves ({capital.length})</button>
+      </div>
+      {view === 'review' && (review.length ? (<>
+        <p className="sub">These were sorted by a best guess and already count in the monthly figures. Pick the right category and press Confirm. Money moved between your own accounts, or sent for someone else, should be &quot;Own transfer&quot; so it is not counted as spending.</p>
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>Date</th><th>Description</th><th className="n">Amount</th><th>Category</th><th /></tr></thead>
+          <tbody>{review.map((t) => <ReviewRow key={t.id} t={t} f={f} show={show} cats={cats} onDone={onDone} />)}</tbody>
+        </table></div>
+      </>) : <p className="all-clear">Everything has been reviewed.</p>)}
+      {view === 'month' && (<>
+        <label className="fin-date">Month <select className="fin-year" value={month} onChange={(e) => setMonth(e.target.value)}>{months.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+        <div className="stats wide fin-stats">
+          <div className="stat"><b>{M(sum('income'))}</b><span>Income</span></div>
+          <div className="stat"><b>{M(-sum('expense'))}</b><span>Spending</span></div>
+          <div className="stat"><b>{inMonth.filter((t) => t.kind === 'transfer').length}</b><span>Own transfers, not counted</span></div>
+        </div>
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>Date</th><th>Description</th><th>Category</th><th className="n">Amount</th></tr></thead>
+          <tbody>{inMonth.map((t) => (
+            <tr key={t.id} className={t.kind === 'transfer' ? 'muted' : ''}>
+              <td className="mono">{t.posted_on.slice(5)}</td>
+              <td>{t.description}<span className="sub">{t.account}</span></td>
+              <td>{KIND_LABEL[t.kind]}<span className="sub">{t.line}{!t.reviewed && ' · to review'}</span></td>
+              <td className={`n ${t.amount < 0 ? 'dn' : 'up'}`}>{show ? orig(t.amount, t.currency) : '••••'}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      </>)}
+      {view === 'capital' && (<>
+        <p className="sub">Large movements that are not everyday income or spending, such as the mortgage payout and money from the Shuswap sale. They are kept out of the monthly figures.</p>
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>Date</th><th>Description</th><th>What it is</th><th className="n">Amount</th></tr></thead>
+          <tbody>{capital.map((t) => (
+            <tr key={t.id}>
+              <td className="mono">{t.posted_on}</td>
+              <td>{t.description}<span className="sub">{t.account}</span></td>
+              <td>{t.line}{!t.reviewed && <span className="sub">to review</span>}</td>
+              <td className={`n ${t.amount < 0 ? 'dn' : 'up'}`}>{show ? orig(t.amount, t.currency) : '••••'}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      </>)}
+      <p className="sub">Felix&apos;s RBC and TD accounts only. Card payments and transfers between your own accounts are left out so nothing is counted twice; TD Visa payments before mid-December 2025 count as one &quot;Credit Card (Felix)&quot; line because the itemised Visa export starts in late November 2025. Airbnb payouts are shared E 41st Ave money and are not counted as income. Account and card numbers were removed.</p>
+    </section>
+  )
+}
+
 // ================================================================= investments tab
 function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show: boolean; userId: string; onDone: () => void }) {
   const [view, setView] = useState<'all' | 'account'>('all')
@@ -578,11 +688,13 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
             </tbody>
           </table></div>
           <p className="sub">
-            Shared income from E 41st Ave is spread over the 6 months it covers. Spending shows your estimate until you add real spending for a month.
+            Shared income from E 41st Ave is spread over the 6 months it covers. From April 2024 to June 2026, spending and income come from Felix&apos;s RBC and TD statements (Norina&apos;s accounts are not in yet); other months show your estimate until you add real spending.
             {zh ? ' 每半年的分紅會平均攤分到六個月。' : ''}
           </p>
           <details className="add-item"><summary>Add income or spending 加入收支</summary><IeForm f={f} userId={userId} onDone={onReload} /></details>
         </section>
+
+        <Statements f={f} fx={fx} show={show} onDone={onReload} />
 
         <section className="sub-panel span-2">
           <h3>
