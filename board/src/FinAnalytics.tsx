@@ -1,7 +1,7 @@
 // Analytics sections shown on each Finance tab. The sums live in finAnalytics.ts.
 import { useMemo, useState } from 'react'
 import { vanDate } from './me'
-import { netWorth } from './finance'
+import { holdingPrice, netWorth, savePortfolioSnapshot, toCad } from './finance'
 import type { Finance, Fx } from './finance'
 import * as A from './finAnalytics'
 import { shortAddress } from './finAnalytics'
@@ -355,6 +355,118 @@ export function AssessmentChart({ f, show }: { f: Finance; show: boolean }) {
         const a = s.pts[0], b = s.pts[s.pts.length - 1]
         return a && b ? `${shortAddress(s.p.address)} ${b.v >= a.v ? '+' : '−'}${pct(Math.abs((b.v - a.v) / a.v), 1)}` : ''
       }).filter(Boolean).join(', ')}.</p>
+    </section>
+  )
+}
+
+// ================================================================= half-year portfolio snapshots
+const TYPE_GROUP = (t: string) => (t === 'crypto' ? 'Crypto' : t === 'stablecoin' ? 'Stablecoins' : 'Stocks')
+export function PortfolioSnapshots({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show: boolean; userId: string; onDone: () => void }) {
+  const [by, setBy] = useState<'owner' | 'type'>('type')
+  const [msg, setMsg] = useState<string | null>(null)
+  const dates = [...new Set(f.snapshots.map((r) => r.as_of))].sort()
+  const today = vanDate()
+  // Today's value from live prices, for comparison.
+  const acct = new Map(f.accounts.map((a) => [a.id, a]))
+  const live = f.holdings.map((h) => ({
+    as_of: 'Today', symbol: h.symbol, name: h.name, owner: acct.get(h.account_id)?.owner ?? '', asset_type: h.asset_type,
+    value_cad: toCad(h.shares * holdingPrice(f, h), h.currency, fx),
+  }))
+  const cols = [...dates, ...(dates.includes(today) ? [] : ['Today'])]
+  const rowsOf = (d: string) => (d === 'Today' ? live : f.snapshots.filter((r) => r.as_of === d))
+  const key = (r: { owner: string; asset_type: string }) => (by === 'owner' ? A.OWNER_NAME[r.owner] ?? r.owner : TYPE_GROUP(r.asset_type))
+  const groups = [...new Set(cols.flatMap((d) => rowsOf(d).map(key)))].sort()
+  const table = cols.map((d) => {
+    const rs = rowsOf(d)
+    const g = Object.fromEntries(groups.map((k) => [k, rs.filter((r) => key(r) === k).reduce((s, r) => s + r.value_cad, 0)]))
+    return { d, total: rs.reduce((s, r) => s + r.value_cad, 0), g }
+  })
+  if (!dates.length) return null
+  const max = Math.max(...table.map((t) => t.total)) || 1
+  const W = 720, H = 220, B = 26, T = 10, bw = (W / cols.length) * 0.55
+  const label = (d: string) => (d === 'Today' ? 'Today' : `${d.slice(5, 7) === '06' ? 'Jun' : 'Dec'} ${d.slice(0, 4)}`)
+  const symbols = [...new Set([...f.snapshots.map((r) => `${r.symbol}|${r.name}`), ...live.map((r) => `${r.symbol}|${r.name}`)])]
+  const holdingRows = symbols.map((s) => {
+    const [sym, name] = s.split('|')
+    const vals = cols.map((d) => rowsOf(d).filter((r) => r.symbol === sym).reduce((t, r) => t + r.value_cad, 0))
+    return { sym, name, vals }
+  }).sort((a, b) => b.vals[b.vals.length - 1] - a.vals[a.vals.length - 1])
+  const first = table[0], last = table[table.length - 1]
+  const save = async () => {
+    setMsg('Saving…')
+    try { const n = await savePortfolioSnapshot(userId, f, fx, today); setMsg(`Saved ${n} holdings for ${today}.`); onDone() } catch (e) { setMsg(`Could not save: ${(e as Error).message}`) }
+  }
+  return (
+    <section className="sub-panel span-2">
+      <h3>Half-year snapshots 半年快照</h3>
+      <div className="stats wide fin-stats">
+        <Ratio value={show ? money(last.total) : '••••'} label={`${label(last.d)} 現值`} />
+        <Ratio value={`${last.total >= first.total ? '+' : '−'}${pct(Math.abs(last.total - first.total) / (first.total || 1), 1)}`} label={`Since ${label(first.d)}`} tone={last.total >= first.total ? 'good' : 'crit'} />
+        <Ratio value={show ? money(Math.max(...table.map((t) => t.total))) : '••••'} label={`Highest, ${label(table.reduce((a, b) => (b.total > a.total ? b : a)).d)}`} />
+      </div>
+      <div className="fin-view" role="group" aria-label="Split snapshots by">
+        <button type="button" className={by === 'type' ? 'on' : ''} aria-pressed={by === 'type'} onClick={() => setBy('type')}>By type</button>
+        <button type="button" className={by === 'owner' ? 'on' : ''} aria-pressed={by === 'owner'} onClick={() => setBy('owner')}>By owner</button>
+      </div>
+      <svg className="fin-chart assess" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Portfolio value at each half-year">
+        {table.map((t, i) => {
+          const x = (i + 0.5) * (W / cols.length) - bw / 2
+          let y = H - B
+          return (
+            <g key={t.d}>
+              {groups.map((k, j) => {
+                const h = (t.g[k] / max) * (H - B - T)
+                y -= h
+                return <rect key={k} x={x} y={y} width={bw} height={Math.max(0, h)} className={`bar-seg c${j % 10}`}><title>{`${label(t.d)} ${k}: ${show ? money(t.g[k]) : pct(t.g[k] / (t.total || 1))}`}</title></rect>
+              })}
+              {show && <text x={x + bw / 2} y={H - B - (t.total / max) * (H - B - T) - 4} textAnchor="middle">{`${Math.round(t.total / 1000)}K`}</text>}
+              <text x={x + bw / 2} y={H - 8} textAnchor="middle">{label(t.d)}</text>
+            </g>
+          )
+        })}
+      </svg>
+      <p className="sub legend">{groups.map((k, j) => <span key={k} className="leg-item"><span className={`dot-c c${j % 10}`} />{k}</span>)}</p>
+      <div className="tbl-wrap"><table className="tbl">
+        <thead><tr><th>Date</th><th className="n">Total</th><th className="n">Change</th>{groups.map((k) => <th key={k} className="n">{k}</th>)}</tr></thead>
+        <tbody>
+          {[...table].reverse().map((t) => {
+            const i = table.indexOf(t)
+            const prev = i > 0 ? table[i - 1].total : null
+            const ch = prev ? (t.total - prev) / prev : null
+            return (
+              <tr key={t.d}>
+                <td>{label(t.d)}</td>
+                <td className="n">{show ? money(t.total) : '••••'}</td>
+                <td className={`n ${ch !== null && ch < 0 ? 'dn' : 'up'}`}>{ch === null ? '-' : `${ch >= 0 ? '+' : '−'}${pct(Math.abs(ch), 1)}`}</td>
+                {groups.map((k) => <td key={k} className="n">{show ? money(t.g[k]) : pct(t.g[k] / (t.total || 1))}</td>)}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table></div>
+      <details className="add-item">
+        <summary>Each holding at each date 逐項明細</summary>
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>Holding</th>{cols.map((d) => <th key={d} className="n">{label(d)}</th>)}<th className="n">Change</th></tr></thead>
+          <tbody>
+            {holdingRows.map((r) => {
+              const a = r.vals.find((v) => v > 0) ?? 0, b = r.vals[r.vals.length - 1]
+              return (
+                <tr key={r.sym}>
+                  <td>{r.name}<span className="sub">{r.sym}</span></td>
+                  {r.vals.map((v, i) => <td key={i} className="n">{v ? (show ? money(v) : '••••') : '-'}</td>)}
+                  <td className={`n ${b < a ? 'dn' : 'up'}`}>{a && b ? `${b >= a ? '+' : '−'}${pct(Math.abs(b - a) / a, 0)}` : '-'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table></div>
+      </details>
+      <div className="form-row">
+        <button type="button" className="btn ghost" onClick={save}>Save today&apos;s snapshot 儲存今日快照</button>
+        {msg && <span className="sub" role="status">{msg}</span>}
+      </div>
+      <p className="sub">Past snapshots were rebuilt from today&apos;s share counts and each date&apos;s closing price and exchange rate, because the holdings have not changed in over two years. Coinbase (50 shares) is included until it was sold on 30 June 2025 and SpaceX from its purchase on 12 June 2026. The Tether amounts on Aave are today&apos;s, so earlier interest is not shown. Investment accounts without a holdings list are not included. Press Save at the end of each June and December to keep the record going.</p>
     </section>
   )
 }
