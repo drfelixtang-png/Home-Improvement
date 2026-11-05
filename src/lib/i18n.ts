@@ -31,6 +31,9 @@ const en = {
 
   // login
   loginTitle: 'Sign in',
+  loginPrivate: 'This is a private app. Only its owner can sign in.',
+  loginNoAccess: 'This email does not have access. This app is private.',
+  loginTooMany: 'Too many sign-in emails were sent. Please wait about an hour and try again.',
   loginIntro: 'Enter your email address. We will email you a link; open it on this device to sign in. No password needed.',
   email: 'Email address',
   sendLink: 'Email me a sign-in link',
@@ -280,6 +283,9 @@ const zh: Record<TKey, string> = {
   optional: '可留空',
 
   loginTitle: '登入',
+  loginPrivate: '這是私人應用程式，只有擁有人可以登入。',
+  loginNoAccess: '這個電郵沒有使用權限。這是私人應用程式。',
+  loginTooMany: '登入電郵發送次數太多，請等候約一小時再試。',
   loginIntro: '請輸入電郵地址。我們會寄出登入連結，請在這部裝置上開啟連結登入，無需密碼。',
   email: '電郵地址',
   sendLink: '寄出登入連結',

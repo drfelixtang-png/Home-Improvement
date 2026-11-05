@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { configMissing, supabase } from '../../src/lib/supabase'
+import { loginProblem } from '../../src/lib/loginError'
 import {
   loadExtra, loadMarkets, loadNews, loadSettings, loadSnapshot, loadStockpile, loadWeather, saveSettings,
 } from './data'
@@ -70,8 +71,16 @@ function Login() {
       email: email.trim(),
       options: { emailRedirectTo: window.location.origin + window.location.pathname, shouldCreateUser: false },
     })
-    if (error) setErr(error.message)
-    else setSent(true)
+    if (error) {
+      const kind = loginProblem(error.message, error.status)
+      setErr(
+        kind === 'noAccess'
+          ? 'This email does not have access. This board is private.'
+          : kind === 'tooMany'
+            ? 'Too many sign-in emails were sent. Please wait about an hour and try again.'
+            : error.message,
+      )
+    } else setSent(true)
   }
   return (
     <main className="login">
@@ -80,6 +89,7 @@ function Login() {
         <p>Check your email for the sign-in link. If it opens the Stockpile Tracker instead, come back to this page: you will already be signed in.</p>
       ) : (
         <form className="form" onSubmit={submit}>
+          <p className="private-note">This is a private board. Only its owner can sign in. <span className="tc">私人頁面，只限擁有人登入。</span></p>
           <p className="sub">Sign in with the same email you use for the Stockpile Tracker.</p>
           <label htmlFor="email">Email</label>
           <input id="email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
