@@ -24,6 +24,29 @@ function Rating({ id, label, value, onChange, low, high }: {
   )
 }
 
+// Hour and minute dropdowns: minutes only 00, 15, 30 and 45. `startHour` puts the likely
+// hours first (evening for bed time, early morning for wake-up time).
+const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'am' : 'pm'}`
+
+function QuarterTime({ id, value, onChange, startHour }: { id: string; value: string | null; onChange: (v: string | null) => void; startHour: number }) {
+  const [h, m] = value ? value.split(':') : ['', '']
+  const mm = m ? String(Math.round(Number(m) / 15) * 15 % 60).padStart(2, '0') : ''
+  const hours = Array.from({ length: 24 }, (_, i) => (startHour + i) % 24)
+  const set = (nh: string, nm: string) => onChange(nh === '' ? null : `${nh.padStart(2, '0')}:${nm || '00'}`)
+  return (
+    <span className="qtime">
+      <select id={id} aria-label="Hour" value={h ? String(Number(h)) : ''} onChange={(e) => set(e.target.value, mm)}>
+        <option value="">--</option>
+        {hours.map((x) => <option key={x} value={x}>{hourLabel(x)}</option>)}
+      </select>
+      <span aria-hidden="true">:</span>
+      <select aria-label="Minutes" value={mm} disabled={!h} onChange={(e) => set(h, e.target.value)}>
+        {['00', '15', '30', '45'].map((x) => <option key={x} value={x}>{x}</option>)}
+      </select>
+    </span>
+  )
+}
+
 function Stepper({ id, value, onChange, step = 0.5, max = 24 }: { id: string; value: number; onChange: (v: number) => void; step?: number; max?: number }) {
   const set = (v: number) => onChange(Math.max(0, Math.min(max, Math.round(v / step) * step)))
   return (
@@ -63,8 +86,8 @@ function Morning({ day, c, prev, onSaved }: { day: string; c: Checkin; prev: Che
       <div className="field">
         <span className="field-l">Sleep last night 昨晚睡眠</span>
         <div className="sleep-times">
-          <label htmlFor="bed">Went to bed 上床<input id="bed" type="time" value={f.bed_time ?? ''} onChange={(e) => setF({ ...f, bed_time: e.target.value || null })} /></label>
-          <label htmlFor="wake">Woke up 起床<input id="wake" type="time" value={f.wake_time ?? ''} onChange={(e) => setF({ ...f, wake_time: e.target.value || null })} /></label>
+          <label htmlFor="bed">Went to bed 上床<QuarterTime id="bed" value={f.bed_time} startHour={20} onChange={(v) => setF({ ...f, bed_time: v })} /></label>
+          <label htmlFor="wake">Woke up 起床<QuarterTime id="wake" value={f.wake_time} startHour={4} onChange={(v) => setF({ ...f, wake_time: v })} /></label>
           <span className="sleep-total">{sleepFrom(f.bed_time, f.wake_time) !== null ? <><b>{sleepFrom(f.bed_time, f.wake_time)}</b> h</> : <span className="sub inline">hours worked out for you</span>}</span>
         </div>
       </div>

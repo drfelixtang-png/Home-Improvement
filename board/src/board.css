@@ -371,3 +371,6 @@ li:hover > .acts, li:focus-within > .acts, .mail-top:hover .acts, .acts:focus-wi
 .sleep-times input { font: inherit; font-family: var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; color-scheme: dark; }
 .sleep-total { font-family: var(--mono); padding-bottom: 6px; }
 .sleep-total b { font-size: 1.3rem; color: var(--accent); }
+.qtime { display: inline-flex; align-items: center; gap: 4px; }
+.qtime select { font: inherit; font-family: var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; color-scheme: dark; }
+.qtime select:disabled { opacity: 0.5; }
