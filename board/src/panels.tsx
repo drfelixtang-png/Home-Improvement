@@ -551,9 +551,27 @@ export function MarketsDetail({ quotes, watch, onSave }: { quotes: Quote[]; watc
         <h3>Watchlist 觀察清單</h3>
         <form className="form" onSubmit={submit}>
           <label htmlFor="watch">One per line: symbol, then a short name. Hong Kong stocks end in .HK (0700.HK), Toronto in .TO (RY.TO).</label>
-          <textarea id="watch" rows={9} className="mono" value={text} onChange={(e) => setText(e.target.value)} />
+          <textarea id="watch" rows={12} className="mono" value={text} onChange={(e) => setText(e.target.value)} />
           <div className="form-row"><button type="submit" className="btn">Save watchlist</button>{msg && <span className="sub">{msg}</span>}</div>
         </form>
+      </section>
+      <section className="sub-panel span-2">
+        <h3>How to write a symbol 代號寫法</h3>
+        <p className="sub">Each line is the symbol, a space, then any name you like, for example <code>TSLA Tesla</code>. Symbols follow Yahoo Finance. To check one, search for it on finance.yahoo.com and copy the code shown beside the name.</p>
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>What</th><th>How to write it</th><th>Examples</th></tr></thead>
+          <tbody>
+            <tr><td>US stock or fund 美股</td><td>Ticker as is</td><td className="mono">TSLA · AAPL · NVDA · VOO</td></tr>
+            <tr><td>Hong Kong stock 港股</td><td>4-digit code, then .HK</td><td className="mono">0700.HK Tencent · 0005.HK HSBC · 2800.HK Tracker Fund</td></tr>
+            <tr><td>Toronto stock 加股</td><td>Ticker, then .TO (.V for TSX Venture)</td><td className="mono">RY.TO · TD.TO · XEQT.TO · SHOP.TO</td></tr>
+            <tr><td>Other markets</td><td>Ticker, then the market code</td><td className="mono">7203.T Tokyo · 005930.KS Seoul · 600519.SS Shanghai · BHP.AX Sydney</td></tr>
+            <tr><td>Market index 指數</td><td>^ in front</td><td className="mono">^HSI · ^GSPTSE · ^GSPC · ^IXIC · ^DJI · ^N225</td></tr>
+            <tr><td>Currency 匯率</td><td>Two currencies, then =X (USD/CAD is just CAD=X)</td><td className="mono">CAD=X · CADHKD=X · USDHKD=X · CNYCAD=X</td></tr>
+            <tr><td>Crypto 加密貨幣</td><td>Coin, a dash, then the currency</td><td className="mono">BTC-USD · BTC-CAD · ETH-USD</td></tr>
+            <tr><td>Commodity 商品</td><td>Futures code, then =F</td><td className="mono">CL=F oil (WTI) · BZ=F oil (Brent) · GC=F gold · SI=F silver · NG=F natural gas</td></tr>
+          </tbody>
+        </table></div>
+        <p className="sub">Up to 20 symbols. Prices refresh each time you open or refresh the board and may be up to 15 minutes delayed. A symbol that cannot be found shows a dash; check the spelling on Yahoo Finance.</p>
       </section>
     </div>
   )
