@@ -162,7 +162,15 @@ export interface BoardSettings {
   bin_note: string
   watchlist: WatchItem[]
   sites: { name: string; url: string }[]
+  journey_start: string
+  areas: Area[]
+  habits: Habit[]
 }
+
+/** A life area, with the hours a week Felix wants to give it. */
+export interface Area { key: string; label: string; label_zh: string; target: number }
+/** A habit and how many days a week it should happen (7 = every day). */
+export interface Habit { key: string; label: string; label_zh: string; per_week: number }
 
 export async function loadSettings(): Promise<BoardSettings> {
   await supabase.from('board_settings').upsert({}, { onConflict: 'user_id', ignoreDuplicates: true })
