@@ -65,6 +65,8 @@ const group = (ps: Piece[], key: (p: Piece) => string): Slice[] => {
 
 export const RISK_LABEL: Record<number, string> = { 1: '1 Very low', 2: '2 Low', 3: '3 Medium', 4: '4 High', 5: '5 Very high' }
 export const riskLabel = (r: number | null) => (r ? RISK_LABEL[r] : 'Not rated')
+// Risk breakdowns read from 1 very low to 5 very high, then not rated.
+const byRiskOrder = (xs: Slice[]) => [...xs].sort((a, b) => (a.label === 'Not rated' ? 9 : Number(a.label[0])) - (b.label === 'Not rated' ? 9 : Number(b.label[0])))
 
 // ------------------------------------------------------------------ overview
 export function overview(f: Finance, fx: Fx) {
@@ -80,7 +82,7 @@ export function overview(f: Finance, fx: Fx) {
     byOwner: group(ps, (p) => (p.owner === 'property' ? 'Shared property' : OWNER_NAME[p.owner] ?? p.owner)),
     byCurrency: group(ps, (p) => p.currency),
     byLiquidity: group(ps, (p) => p.liquidity),
-    riskOfMoney: group(money, (p) => riskLabel(p.risk)),
+    riskOfMoney: byRiskOrder(group(money, (p) => riskLabel(p.risk))),
     riskAvg,
     home,
     freedom: w.total - home,
@@ -113,7 +115,7 @@ export function investments(f: Finance, fx: Fx) {
   return {
     sum,
     bySector: group(inv, (p) => p.sector),
-    byRisk: group(inv, (p) => riskLabel(p.risk)),
+    byRisk: byRiskOrder(group(inv, (p) => riskLabel(p.risk))),
     byType: group(inv, (p) => ({ stock: 'Single stocks', reit: 'REITs', fund: 'Funds', crypto: 'Crypto', stablecoin: 'Stablecoins', bond: 'Bonds', investment: 'Accounts without a holdings list' } as Record<string, string>)[p.type] ?? 'Other'),
     byOwner: group(inv, (p) => OWNER_NAME[p.owner] ?? p.owner),
     byCurrency: group(inv, (p) => p.currency),
