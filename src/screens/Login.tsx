@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
+import { loginProblem } from '../lib/loginError'
 
 export function Login() {
   const { t } = useStore()
@@ -16,10 +17,14 @@ export function Login() {
     setErr(null)
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin + window.location.pathname },
+      // Never create a new account here: only existing accounts get a link.
+      options: { emailRedirectTo: window.location.origin + window.location.pathname, shouldCreateUser: false },
     })
     setBusy(false)
-    if (error) setErr(error.message)
+    if (error) {
+      const kind = loginProblem(error.message, error.status)
+      setErr(kind === 'noAccess' ? t('loginNoAccess') : kind === 'tooMany' ? t('loginTooMany') : t('error', { msg: error.message }))
+    }
     else setSent(true)
   }
 
@@ -30,6 +35,7 @@ export function Login() {
         <p>{t('linkSent')}</p>
       ) : (
         <form onSubmit={submit} className="stack">
+          <p className="private-note">{t('loginPrivate')}</p>
           <p>{t('loginIntro')}</p>
           <label>
             <span>{t('email')}</span>
@@ -38,7 +44,7 @@ export function Login() {
           <button className="primary" disabled={busy}>
             {busy ? t('saving') : t('sendLink')}
           </button>
-          {err && <p className="text-red">{t('error', { msg: err })}</p>}
+          {err && <p className="text-red">{err}</p>}
         </form>
       )}
     </section>
