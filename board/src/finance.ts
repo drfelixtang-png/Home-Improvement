@@ -22,6 +22,10 @@ export interface FinIe {
   currency: Cur; covers_months: number; source: string; note: string
 }
 export interface FinHistory { as_of: string; measure: string; category: string | null; amount: number; currency: Cur; note: string }
+export interface FinHolding {
+  id: string; account_id: string; symbol: string; name: string; name_zh: string
+  shares: number; currency: Cur; last_price: number | null; updated_at: string
+}
 export interface FinArchive { id: string; name: string; as_of: string | null; data: unknown[][] }
 export interface FinSettings {
   target?: { cash_months: number; safe_months: number; note?: string }
@@ -34,6 +38,7 @@ export interface FinSettings {
 export interface Finance {
   accounts: FinAccount[]; balances: FinBalance[]; properties: FinProperty[]; ie: FinIe[]
   history: FinHistory[]; archive: FinArchive[]; settings: FinSettings
+  holdings: FinHolding[]; prices: Record<string, Quote>
 }
 
 const n = (v: unknown) => (v === null || v === undefined ? null : Number(v))
@@ -50,7 +55,7 @@ async function all<T>(table: string, order: string): Promise<T[]> {
 }
 
 export async function loadFinance(): Promise<Finance> {
-  const [accounts, balances, properties, ie, history, archive, settings] = await Promise.all([
+  const [accounts, balances, properties, ie, history, archive, settings, holdingRows] = await Promise.all([
     all<FinAccount>('fin_accounts', 'sort'),
     all<FinBalance>('fin_balances', 'as_of'),
     all<FinProperty>('fin_properties', 'sort'),
@@ -58,9 +63,13 @@ export async function loadFinance(): Promise<Finance> {
     all<FinHistory>('fin_history', 'as_of'),
     all<FinArchive>('fin_archive', 'as_of'),
     supabase.from('fin_settings').select('data').maybeSingle(),
+    all<FinHolding>('fin_holdings', 'symbol'),
   ])
   if (settings.error) throw settings.error
+  const holdings = holdingRows.map((h) => ({ ...h, shares: Number(h.shares), last_price: n(h.last_price) })).filter((h) => h.shares > 0)
   return {
+    holdings,
+    prices: await loadPrices([...new Set(holdings.map((h) => h.symbol))]),
     accounts,
     balances: balances.map((b) => ({ ...b, amount: Number(b.amount) })),
     properties: properties.map((p) => ({
@@ -113,6 +122,33 @@ export async function loadFx(): Promise<Fx> {
   return FX_FALLBACK
 }
 
+// Live prices for stock holdings, 20 symbols per request (the feed's limit). A failure leaves the stored prices in use.
+async function loadPrices(symbols: string[]): Promise<Record<string, Quote>> {
+  const out: Record<string, Quote> = {}
+  for (let i = 0; i < symbols.length; i += 20) {
+    try {
+      const res = await feeds<{ quotes: Quote[] }>(`kind=markets&symbols=${symbols.slice(i, i + 20).map(encodeURIComponent).join(',')}`)
+      for (const q of res.quotes) if (q.price) out[q.symbol] = q
+    } catch { /* keep stored prices */ }
+  }
+  return out
+}
+
+export const holdingPrice = (f: Finance, h: FinHolding) => f.prices[h.symbol]?.price ?? h.last_price ?? 0
+export const holdingsOf = (f: Finance, accountId: string) => f.holdings.filter((h) => h.account_id === accountId)
+
+// An account's value in its own currency: its stocks at live prices when it has a holdings list, else its latest balance.
+export function accountAmount(f: Finance, accountId: string, latest: Map<string, FinBalance>): number | null {
+  const hs = holdingsOf(f, accountId)
+  if (hs.length) return hs.reduce((s, h) => s + h.shares * holdingPrice(f, h), 0)
+  return latest.get(accountId)?.amount ?? null
+}
+
+export async function saveHolding(userId: string, row: { account_id: string; symbol: string; name: string; name_zh: string; shares: number; currency: Cur; last_price: number | null }): Promise<void> {
+  const { error } = await supabase.from('fin_holdings').upsert({ ...row, user_id: userId, updated_at: new Date().toISOString() }, { onConflict: 'account_id,symbol' })
+  if (error) throw error
+}
+
 export function toCad(amount: number, cur: Cur, fx: Fx): number {
   if (cur === 'USD') return amount * fx.usdCad
   if (cur === 'HKD') return amount / fx.cadHkd
@@ -147,11 +183,12 @@ export function netWorth(f: Finance, fx: Fx): Worth {
   let asOf: string | null = null
   for (const a of f.accounts.filter((x) => x.active)) {
     const b = latest.get(a.id)
-    if (!b) continue
-    const v = toCad(b.amount, a.currency, fx)
+    const amt = accountAmount(f, a.id, latest)
+    if (amt === null) continue
+    const v = toCad(amt, a.currency, fx)
     byKind[a.kind] += v
     owners.set(a.owner, (owners.get(a.owner) ?? 0) + v)
-    if (!asOf || b.as_of > asOf) asOf = b.as_of
+    if (b && (!asOf || b.as_of > asOf)) asOf = b.as_of
   }
   const properties = f.properties.filter((p) => p.status === 'held').map((p) => ({ p, equity: ((p.value ?? 0) - p.mortgage) * p.share }))
   const property = properties.reduce((s, x) => s + x.equity, 0)

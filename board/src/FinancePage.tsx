@@ -3,10 +3,11 @@ import type { FormEvent, ReactNode } from 'react'
 import { shortDate } from './format'
 import { vanDate } from './me'
 import {
-  addIe, addMonth, ieYears, mix, monthly, monthsBack, netWorth, saveBalances, saveFinSettings,
+  accountAmount, addIe, addMonth, holdingPrice, holdingsOf, ieYears, latestBalances, mix, monthly, monthsBack, netWorth,
+  saveBalances, saveFinSettings, saveHolding,
   sumMap, toCad, updateProperty, yearLines,
 } from './finance'
-import type { AccountKind, Cur, Finance, FinProperty, Fx } from './finance'
+import type { AccountKind, Cur, Finance, FinAccount, FinHolding, FinProperty, Fx } from './finance'
 
 type Lang = 'zh' | 'en'
 
@@ -15,7 +16,7 @@ const KIND: Record<AccountKind, [string, string]> = {
   cash: ['Cash', '現金'], gic: ['GIC', '定期'], investment: ['Investment', '投資'],
   credit_card: ['Credit card', '信用卡'], loan: ['Loan', '貸款'], other: ['Other', '其他'],
 }
-const OWNER: Record<string, string> = { felix: 'Felix', norina: 'Norina', joint: 'Joint' }
+const OWNER: Record<string, string> = { felix: 'Felix', norina: 'Norina', joint: 'Joint', felicia: 'Felicia' }
 const STATUS: Record<FinProperty['status'], string> = { held: 'Owned', sold: 'Sold', operated: 'Run, not owned' }
 
 function money(v: number, digits = 0): string {
@@ -101,7 +102,7 @@ function SnapshotForm({ f, fx, userId, onDone }: { f: Finance; fx: Fx; userId: s
     for (const b of f.balances) if (!seen.has(b.account_id) || b.as_of > seen.get(b.account_id)!) { seen.set(b.account_id, b.as_of); m.set(b.account_id, b.amount) }
     return m
   }, [f.balances])
-  const active = f.accounts.filter((a) => a.active)
+  const active = f.accounts.filter((a) => a.active && !holdingsOf(f, a.id).length)
   const [asOf, setAsOf] = useState(vanDate())
   const [vals, setVals] = useState<Record<string, string>>(() => Object.fromEntries(active.map((a) => [a.id, String(latest.get(a.id) ?? '')])))
   const [msg, setMsg] = useState<string | null>(null)
@@ -124,6 +125,7 @@ function SnapshotForm({ f, fx, userId, onDone }: { f: Finance; fx: Fx; userId: s
           </label>
         ))}
       </div>
+      {f.accounts.some((a) => holdingsOf(f, a.id).length) && <p className="sub">Stock accounts with a holdings list are priced live, so they are not in this form. Change their share counts under Holdings.</p>}
       <div className="form-row"><button type="submit" className="btn">Save snapshot 儲存</button><span className="sub inline">Accounts total {money(total)}</span>{msg && <span className="sub" role="status">{msg}</span>}</div>
     </form>
   )
@@ -210,6 +212,84 @@ function PropertyRow({ p, show, onDone }: { p: FinProperty; show: boolean; onDon
   </>)
 }
 
+// ================================================================= stock holdings
+function HoldingRow({ f, h, fx, show, userId, onDone }: { f: Finance; h: FinHolding; fx: Fx; show: boolean; userId: string; onDone: () => void }) {
+  const [edit, setEdit] = useState(false)
+  const [shares, setShares] = useState(String(h.shares))
+  const [msg, setMsg] = useState<string | null>(null)
+  const q = f.prices[h.symbol]
+  const price = holdingPrice(f, h)
+  const value = h.shares * price
+  const save = async (e: FormEvent) => {
+    e.preventDefault()
+    try { await saveHolding(userId, { account_id: h.account_id, symbol: h.symbol, name: h.name, name_zh: h.name_zh, shares: Number(shares), currency: h.currency, last_price: price }); setEdit(false); onDone() } catch (err) { setMsg((err as Error).message) }
+  }
+  return (
+    <tr>
+      <td>
+        <a className="q-link" href={`https://finance.yahoo.com/quote/${encodeURIComponent(h.symbol)}/`} target="_blank" rel="noreferrer">{h.name}</a> <span className="tc">{h.name_zh}</span>
+        <span className="sub">{h.symbol}{!q && ' · stored price, live price unavailable'}</span>
+      </td>
+      <td className="n">
+        {edit ? (
+          <form className="fin-inline" onSubmit={save}>
+            <input aria-label={`Shares of ${h.name}`} inputMode="decimal" value={shares} onChange={(e) => setShares(e.target.value.replace(/[^0-9.]/g, ''))} />
+            <button type="submit" className="act">Save</button>
+            {msg && <span className="problem">{msg}</span>}
+          </form>
+        ) : h.shares.toLocaleString('en-CA')}
+      </td>
+      <td className="n">{price.toLocaleString('en-CA', { maximumFractionDigits: 3 })}{q?.changePct !== null && q?.changePct !== undefined && <span className={`sub ${q.changePct >= 0 ? 'up' : 'dn'}`}>{q.changePct >= 0 ? '+' : '−'}{Math.abs(q.changePct).toFixed(2)}%</span>}</td>
+      <td className="n">{show ? orig(value, h.currency) : '••••'}{show && h.currency !== 'CAD' && <span className="sub">{money(toCad(value, h.currency, fx))}</span>}</td>
+      <td><button type="button" className="act" onClick={() => setEdit(!edit)} aria-expanded={edit}>{edit ? 'Close' : 'Edit'}</button></td>
+    </tr>
+  )
+}
+
+function AddHolding({ a, userId, onDone }: { a: FinAccount; userId: string; onDone: () => void }) {
+  const [v, setV] = useState({ symbol: '', name: '', name_zh: '', shares: '', price: '' })
+  const [msg, setMsg] = useState<string | null>(null)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    let symbol = v.symbol.trim().toUpperCase()
+    if (/^\d{1,5}$/.test(symbol)) symbol = `${String(Number(symbol)).padStart(4, '0')}.HK`
+    try {
+      await saveHolding(userId, { account_id: a.id, symbol, name: v.name.trim() || symbol, name_zh: v.name_zh.trim(), shares: Number(v.shares), currency: a.currency, last_price: v.price ? Number(v.price) : null })
+      setMsg(`Saved ${symbol}.`); setV({ symbol: '', name: '', name_zh: '', shares: '', price: '' }); onDone()
+    } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) }
+  }
+  return (
+    <details className="add-item"><summary>Add or change a holding 加入持股</summary>
+      <form className="hi-edit" onSubmit={submit}>
+        <label>Stock code<input required placeholder="700 or 0700.HK" value={v.symbol} onChange={(e) => setV({ ...v, symbol: e.target.value })} /></label>
+        <label>Name<input value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></label>
+        <label>Name (中文)<input className="tc-text" value={v.name_zh} onChange={(e) => setV({ ...v, name_zh: e.target.value })} /></label>
+        <label>Shares<input required inputMode="decimal" value={v.shares} onChange={(e) => setV({ ...v, shares: e.target.value.replace(/[^0-9.]/g, '') })} /></label>
+        <label>Price now (optional)<input inputMode="decimal" value={v.price} onChange={(e) => setV({ ...v, price: e.target.value.replace(/[^0-9.]/g, '') })} /></label>
+        <div className="form-row"><button type="submit" className="btn">Save 儲存</button>{msg && <span className="sub" role="status">{msg}</span>}</div>
+        <p className="sub wide">For a Hong Kong stock, type the number from the app (for example 700); it becomes 0700.HK. Saving a code that is already in the list replaces its share count. Set shares to 0 after selling everything.</p>
+      </form>
+    </details>
+  )
+}
+
+function Holdings({ f, a, fx, show, userId, onDone }: { f: Finance; a: FinAccount; fx: Fx; show: boolean; userId: string; onDone: () => void }) {
+  const hs = [...holdingsOf(f, a.id)].sort((x, y) => y.shares * holdingPrice(f, y) - x.shares * holdingPrice(f, x))
+  const total = hs.reduce((s, h) => s + h.shares * holdingPrice(f, h), 0)
+  const dayMove = hs.reduce((s, h) => { const q = f.prices[h.symbol]; return s + (q?.change ? q.change * h.shares : 0) }, 0)
+  return (
+    <section className="sub-panel span-2">
+      <h3>Holdings 持股 · {OWNER[a.owner] ?? a.owner}, {a.institution} <span className="sub inline">{hs.length} stocks · {show ? `${orig(total, a.currency)} (${money(toCad(total, a.currency, fx))})` : '••••'}{dayMove ? ` · today ${dayMove >= 0 ? '+' : '−'}${show ? orig(Math.abs(dayMove), a.currency) : `${Math.abs((dayMove / (total - dayMove || 1)) * 100).toFixed(2)}%`}` : ''}</span></h3>
+      <div className="tbl-wrap"><table className="tbl">
+        <thead><tr><th>Stock</th><th className="n">Shares</th><th className="n">Price</th><th className="n">Value</th><th /></tr></thead>
+        <tbody>{hs.map((h) => <HoldingRow key={h.id} f={f} h={h} fx={fx} show={show} userId={userId} onDone={onDone} />)}</tbody>
+      </table></div>
+      <p className="sub">Prices from Yahoo Finance, Hong Kong prices may be delayed. When a live price is missing, the price from when the holding was entered is used.</p>
+      <AddHolding a={a} userId={userId} onDone={onDone} />
+    </section>
+  )
+}
+
 // ================================================================= page
 export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx: Fx; userId: string; onReload: () => void; lang: Lang }) {
   const [show, setShowState] = useState(() => { try { return localStorage.getItem(SHOW_KEY) === '1' } catch { return false } })
@@ -254,8 +334,9 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
   const linesIncome = useMemo(() => yearLines(f, fx, year, 'income'), [f, fx, year])
 
   const owners = [...new Set(f.accounts.map((a) => a.owner))]
-  const latest = new Map<string, { amount: number; as_of: string }>()
-  for (const b of f.balances) { const c = latest.get(b.account_id); if (!c || b.as_of > c.as_of) latest.set(b.account_id, b) }
+  const latest = latestBalances(f)
+  const amountOf = (a: FinAccount) => accountAmount(f, a.id, latest)
+  const stockAccounts = f.accounts.filter((a) => a.active && holdingsOf(f, a.id).length)
 
   return (
     <main className="detail fin">
@@ -288,7 +369,7 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
           <h3>What we own 資產組成</h3>
           <ul className="kv">
             {w.properties.map(({ p, equity }) => <li key={p.id}><span>{p.address}{p.share < 1 ? ` (${Math.round(p.share * 100)}%)` : ''}</span><b>{M(equity)}</b></li>)}
-            {w.byOwner.map((o) => <li key={o.owner}><span>{OWNER[o.owner] ?? o.owner}&apos;s accounts</span><b>{M(o.total)}</b></li>)}
+            {w.byOwner.map((o) => <li key={o.owner}><span>{OWNER[o.owner] ?? o.owner}&apos;s accounts{o.owner === 'felicia' && <span className="sub inline"> managed by Felix</span>}</span><b>{M(o.total)}</b></li>)}
             <li><span>Owing on credit cards and loans <span className="sub inline">already counted above</span></span><b>{M(w.debt)}</b></li>
             <li className="total"><span>Net worth</span><b>{M(w.total)}</b></li>
           </ul>
@@ -353,7 +434,7 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
           <div className="detail-grid">
             {owners.map((o) => {
               const list = f.accounts.filter((a) => a.owner === o && a.active)
-              const total = list.reduce((s, a) => s + (latest.has(a.id) ? toCad(latest.get(a.id)!.amount, a.currency, fx) : 0), 0)
+              const total = list.reduce((s, a) => s + toCad(amountOf(a) ?? 0, a.currency, fx), 0)
               return (
                 <div key={o} className="tbl-wrap">
                   <h4>{OWNER[o] ?? o} · {M(total)}</h4>
@@ -361,12 +442,13 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
                     <thead><tr><th>Account</th><th>Type</th><th className="n">Balance</th></tr></thead>
                     <tbody>
                       {list.map((a) => {
-                        const b = latest.get(a.id)
+                        const b = amountOf(a)
+                        const live = holdingsOf(f, a.id).length > 0
                         return (
                           <tr key={a.id}>
                             <td>{a.institution} {a.name}{a.note && <span className="sub">{a.note}</span>}</td>
                             <td><span className={`pill k-${a.kind}`}>{KIND[a.kind][0]}</span></td>
-                            <td className="n">{b ? (show ? orig(b.amount, a.currency) : '••••') : '-'}{b && a.currency !== 'CAD' && show && <span className="sub">{money(toCad(b.amount, a.currency, fx))}</span>}</td>
+                            <td className="n">{b !== null ? (show ? orig(b, a.currency) : '••••') : '-'}{b !== null && a.currency !== 'CAD' && show && <span className="sub">{money(toCad(b, a.currency, fx))}</span>}{live && <span className="sub">live prices</span>}</td>
                           </tr>
                         )
                       })}
@@ -377,6 +459,8 @@ export function FinancePage({ f, fx, userId, onReload, lang }: { f: Finance; fx:
             })}
           </div>
         </section>
+
+        {stockAccounts.map((a) => <Holdings key={a.id} f={f} a={a} fx={fx} show={show} userId={userId} onDone={onReload} />)}
 
         <section className="sub-panel span-2">
           <h3>Properties 物業</h3>
