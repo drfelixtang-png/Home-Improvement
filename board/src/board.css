@@ -477,3 +477,6 @@ a.q-link span { font-size: 0.8em; color: var(--muted); }
 .key-line.s0 { border-color: #f0b44c; } .key-line.s1 { border-color: #8fb8de; } .key-line.s2 { border-color: #5fcf8f; } .key-line.s3 { border-color: #e07a6b; }
 .legend { flex-wrap: wrap; }
 .fin-chart.assess { max-width: 980px; } .fin-chart.assess text { font-size: 9px; }
+
+.fin-chart .apt.s4 { fill: #b79ce0; } .key-line.s4 { border-color: #b79ce0; }
+.fin-chart .apt.s5 { fill: #6fd3cf; } .key-line.s5 { border-color: #6fd3cf; }

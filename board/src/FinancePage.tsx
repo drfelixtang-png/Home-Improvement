@@ -27,7 +27,7 @@ const KIND: Record<AccountKind, [string, string]> = {
   credit_card: ['Credit card', '信用卡'], loan: ['Loan', '貸款'], other: ['Other', '其他'],
 }
 const OWNER: Record<string, string> = { felix: 'Felix', norina: 'Norina', joint: 'Joint', felicia: 'Felicia' }
-const STATUS: Record<FinProperty['status'], string> = { held: 'Owned', sold: 'Sold', operated: 'Run, not owned' }
+const STATUS: Record<FinProperty['status'], string> = { held: 'Owned', sold: 'Sold', operated: 'Run, not owned', record: 'Family, record only' }
 
 function money(v: number, digits = 0): string {
   const s = Math.abs(v).toLocaleString('en-CA', { minimumFractionDigits: digits, maximumFractionDigits: digits })
