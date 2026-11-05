@@ -1,10 +1,16 @@
 # Morning Board: daily summary task
 
-This is the prompt the scheduled Claude task runs every morning at about 7:10 am
-Vancouver time. It writes one row into `public.board_snapshots` in the
-"Stockpile Tracker" Supabase project, which the Morning Board (`/board/`) reads.
+This is the prompt the scheduled Claude task "Morning Board summary" runs every morning at 7:10 am Vancouver time (14:10 UTC; British Columbia is on permanent Pacific time, UTC-7, all year). It writes one row into public.board_snapshots in the "Stockpile Tracker" Supabase project, which the Morning Board (/board/) reads.
 
 If you change the prompt here, update the scheduled task too (and the other way round).
+
+Last updated: November 5, 2026. Changes from the previous version:
+- Step 4: the "Claude session waiting" check is skipped quietly if the list_sessions tool is not available.
+- Step 5: websites are checked with WebFetch instead of curl (the cloud workspace blocks curl to outside sites). "Team tools" now points to https://team.serenehost.ca/team/.
+- Step 7: the insert is sent on its own. The old delete was removed because the Supabase connector holds deletes for approval, which made the whole save time out. Old snapshots are now removed by a database trigger (board_snapshots_prune) in the Stockpile Tracker project.
+- Step 8: a failed save now produces an alert starting with "早晨摘要未能儲存：".
+
+Task settings (outside the prompt): connectors Gmail, Google Calendar, Supabase (add Claude Code Remote for the "Claude session waiting" items); schedule `10 14 * * *` (UTC).
 
 ---
 
@@ -81,12 +87,14 @@ Ignore enquiries or hosts named "Test". If Guesty data is more than 2 days old, 
 `soon` item saying so (the check-in numbers depend on it).
 
 ## 4. Waiting on you
-Use the claude-code-remote `list_sessions` tool (`mine: true`). For each session whose
+If a claude-code-remote `list_sessions` tool is available (search for it with
+ToolSearch if tools are deferred), call it with `mine: true`. For each session whose
 status_bucket is BLOCKED, add an item "Claude session waiting: <title>" with what it
-asked (from post_turn_summary) and url `https://claude.ai/code/<session id>`. Also add
-bills or payments due today or tomorrow from the calendar. Keys: "session:<session id>",
-"bill:<what>:<date>". SereneHost item keys: "sh:<short stable name>", for example
-"sh:guesty-sync" or "sh:flag:<property>:<title>".
+asked (from post_turn_summary) and url `https://claude.ai/code/<session id>`. If no such
+tool is available, skip this part quietly: add no item about it.
+Also add bills or payments due today or tomorrow from the calendar. Keys:
+"session:<session id>", "bill:<what>:<date>". SereneHost item keys: "sh:<short stable
+name>", for example "sh:guesty-sync" or "sh:flag:<property>:<title>".
 
 ## 4b. Deadlines (next 14 days)
 Collect every dated deadline from the next 14 days (and anything overdue up to 3 days):
@@ -103,10 +111,15 @@ points (busiest days, key deadlines, travel or court dates, SereneHost peaks). O
 days set `week_ahead` to null.
 
 ## 5. Websites
-Fetch each URL with `curl -sL -o /dev/null -w '%{http_code} %{time_total}' --max-time 20`:
-https://serenehost.ca/ (name "SereneHost"), https://serenehost.ca/team/ ("Team tools"),
-https://drfelixtang-png.github.io/Home-Improvement/ ("Stockpile Tracker").
-ok = status 200 to 399.
+Do not use curl or any shell command for this step: the cloud workspace blocks outside
+sites. Instead, use the WebFetch tool (load it with ToolSearch if needed) on each URL:
+https://serenehost.ca/ (name "SereneHost"), https://team.serenehost.ca/team/
+("Team tools"), https://drfelixtang-png.github.io/Home-Improvement/ ("Stockpile Tracker").
+If a fetch reports a redirect, fetch the address it redirects to once and judge that.
+ok = true if the page loads with real content; ok = false if the fetch fails, times
+out, or returns an error page. Set `status` to the HTTP status code if the tool reports
+it, otherwise 200 when ok and null when not. Set `ms` to null unless the tool reports a
+time.
 
 ## 6. Overview
 Write the summary in point form, 4 to 6 short points, most important first: anything
@@ -121,13 +134,17 @@ at the end.
 Style: plain English, no em dashes, no contractions, no abbreviations where a word works.
 
 ## 7. Save
-Insert one row into the Supabase project "Stockpile Tracker" (id kfiwwtfchxbixijvvvcj):
+Insert one row into the Supabase project "Stockpile Tracker" (id kfiwwtfchxbixijvvvcj).
+Send this insert as the only statement in its own execute_sql call:
 
 ```sql
 insert into public.board_snapshots (user_id, data)
 values ('9f8fa71a-91e1-46ea-b88e-1a64f97f2d09', $snap$ <JSON> $snap$::jsonb);
-delete from public.board_snapshots where created_at < now() - interval '30 days';
 ```
+
+Do not add a delete or any other statement to this call, and do not run any delete
+anywhere in this task. The database removes snapshots older than 30 days by itself
+whenever a new row is inserted.
 
 The JSON must match this shape:
 
@@ -141,14 +158,14 @@ The JSON must match this shape:
   "serenehost": {
     "data_as_of": "ISO or null",
     "stats": [{ "label": "Guests in house", "label_zh": "住客", "value": 6 }],
-    "items": [{ "severity": "urgent|soon|info", "title": "…", "detail": "…", "url": "…" }],
+    "items": [{ "key": "sh:…", "severity": "urgent|soon|info", "title": "…", "detail": "…", "url": "…" }],
     "movements": [{ "day": "today|tomorrow", "kind": "in|out", "property": "…", "time": "16:00", "guests": 3, "channel": "Airbnb" }],
     "cleans": [{ "day": "today|tomorrow", "property": "…", "status": "due", "assignee": null }],
     "tasks": [{ "title": "…", "stage": "…", "due_on": "YYYY-MM-DD or null", "owner": "…", "waiting_on": null }],
     "next_meeting": { "title": "…", "starts_at": "ISO", "open_items": 3 } or null
   },
-  "inbox": { "scanned": 37, "items": [{ "severity": "…", "category": "Work|Reply|Bill|SereneHost|Money|FYI", "from": "…", "subject": "…", "title": "one-line summary", "detail": "…", "why": "…", "due": "YYYY-MM-DD or null", "received": "YYYY-MM-DD", "url": "Gmail thread viewUrl" }] },
-  "waiting": [{ "severity": "…", "title": "…", "detail": "…", "url": "…" }],
+  "inbox": { "scanned": 37, "items": [{ "key": "mail:…", "severity": "…", "category": "Work|Reply|Bill|SereneHost|Money|FYI", "from": "…", "subject": "…", "title": "one-line summary", "detail": "…", "why": "…", "due": "YYYY-MM-DD or null", "received": "YYYY-MM-DD", "url": "Gmail thread viewUrl" }] },
+  "waiting": [{ "key": "…", "severity": "…", "title": "…", "detail": "…", "url": "…" }],
   "sites": [{ "name": "…", "url": "…", "ok": true, "status": 200, "ms": 600 }]
 }
 ```
@@ -159,13 +176,16 @@ Stats to include, in this order: Guests in house, Check-ins today, Check-outs to
 Open flags, Check-ins tomorrow, Check-outs tomorrow, Cleans today, Hosts onboarding,
 Open team tasks. Sort every items list urgent first, then soon, then info.
 
-If a source fails, still save the snapshot: leave that block out and add an `info`
-item to `waiting` saying which source could not be read.
+If a source fails (for example a connector is not available in this run), still save
+the snapshot: leave that block out and add an `info` item to `waiting` saying which
+source could not be read.
 
 ## 8. Phone alert
 Your final message is sent to Felix's phone as a notification. Make it short:
-- If there are `urgent` items (from email, SereneHost, WhatsApp or deadlines due today
-  or tomorrow), write "急：" followed by the 1 to 3 most urgent items in Traditional
-  Chinese, one line each.
+- If the insert in step 7 failed, write "早晨摘要未能儲存：" followed by the reason in
+  one short line, then the 1 to 3 most urgent items, if any.
+- Otherwise, if there are `urgent` items (from email, SereneHost, WhatsApp or deadlines
+  due today or tomorrow), write "急：" followed by the 1 to 3 most urgent items in
+  Traditional Chinese, one line each.
 - Otherwise write only "早晨。今日沒有急事，摘要已更新。"
 Do not add anything else to the final message.
