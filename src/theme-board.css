@@ -395,3 +395,272 @@ input[type='checkbox'] {
     font-size: 0.85rem;
   }
 }
+
+/* =================================================================
+   Same proportions as the Morning Board: 1480 px page, 15 px text,
+   board-style top bar, small tabs, compact controls.
+   ================================================================= */
+:root {
+  --tap: 36px;
+}
+.header {
+  position: static;
+  background: transparent;
+  border-bottom: 0;
+}
+.hdr {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 20px max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px 24px;
+}
+.greet h1 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.greet h1 a {
+  color: inherit;
+  text-decoration: none;
+}
+.greet h1 a:hover {
+  color: var(--brand);
+}
+.tc {
+  font-family: var(--tc);
+  font-weight: 500;
+}
+.date {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+.hdr-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.app-switch {
+  margin-left: 0;
+  font-size: 0.85rem;
+}
+.app-switch a,
+.app-switch span.here {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  line-height: 1.3;
+}
+.lang-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.lang-seg button {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+}
+.lang-seg button.on {
+  background: var(--brand);
+  color: var(--brand-text);
+}
+.lang-seg button:not(.on):hover {
+  color: var(--text);
+}
+.tabs-bar {
+  max-width: 1480px;
+  margin: 12px auto 0;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.tabs-bar a {
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 3px;
+  color: var(--muted);
+  border: 1px solid transparent;
+  text-decoration: none;
+}
+.tabs-bar a:hover {
+  color: var(--brand);
+}
+.tabs-bar a.on {
+  color: var(--brand);
+  border-color: var(--border);
+  font-weight: 600;
+}
+
+/* Page body */
+.main {
+  max-width: 1480px;
+  padding: 14px max(16px, env(safe-area-inset-right, 0px)) 32px max(16px, env(safe-area-inset-left, 0px));
+}
+body {
+  font-size: 15px;
+  line-height: 1.45;
+}
+.main h1 {
+  font-size: 1.25rem;
+  margin: 0.3em 0;
+}
+.main h2 {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 1.2em 0 0.6em;
+}
+.modal h2 {
+  font-size: 1.1rem;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+.card {
+  padding: 14px 16px;
+  margin: 8px 0;
+}
+
+/* Controls at the board's size */
+button {
+  min-height: var(--tap);
+  font-size: 0.88rem;
+  padding: 0 12px;
+}
+input,
+select,
+textarea {
+  min-height: var(--tap);
+  font-size: 0.92rem;
+  padding: 6px 10px;
+}
+.step-btn {
+  min-height: 34px;
+  width: 34px;
+  font-size: 1.1rem;
+}
+.x-btn {
+  min-height: 34px;
+  width: 34px;
+  font-size: 1.2rem;
+}
+.loc-select {
+  min-height: 32px;
+  font-size: 0.85rem;
+}
+.toolbar {
+  margin: 10px 0;
+}
+.chip {
+  min-height: 30px;
+  font-size: 0.85rem;
+}
+.banner {
+  padding: 10px 16px;
+  font-size: 0.95rem;
+}
+
+/* Inventory rows like the board's rows */
+.item-row {
+  padding: 8px 12px;
+  font-size: 0.92rem;
+}
+.item-name {
+  font-size: 0.95rem;
+}
+.item-highlight,
+.item-notes {
+  font-size: 0.82rem;
+}
+.items-head {
+  font-size: 0.7rem;
+}
+@media (min-width: 760px) {
+  .items.quick .items-head,
+  .items.quick .item-row {
+    grid-template-columns: 3em minmax(0, 3fr) 1.6fr 1fr 1.3fr 44px;
+  }
+}
+
+/* Phone: keep the board's spacing, slightly larger taps */
+@media (max-width: 639px) {
+  :root {
+    --tap: 40px;
+  }
+  .hdr {
+    padding-top: 14px;
+  }
+  .greet h1 {
+    font-size: 1.35rem;
+  }
+  .step-btn {
+    min-height: 38px;
+    width: 38px;
+  }
+}
+@media (max-width: 479px) {
+  .app-switch .tc {
+    display: none;
+  }
+  .app-switch a,
+  .app-switch span.here {
+    padding: 5px 10px;
+  }
+  .hdr-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* Phone inventory: a dense list like the board's rows */
+@media (max-width: 759px) {
+  .items.quick {
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .items.quick .item-row {
+    border-radius: 0;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 8px 10px 8px 8px;
+    gap: 2px 8px;
+  }
+  .items.quick .item-row:last-child {
+    border-bottom: 0;
+  }
+  .items.quick .item-exp:has(> .muted:only-child) {
+    display: none;
+  }
+  .tags {
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  .tag {
+    font-size: 0.62rem;
+    letter-spacing: 0.02em;
+    padding: 0 6px;
+  }
+  .qty-text {
+    font-size: 0.92rem;
+  }
+}
