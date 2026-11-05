@@ -7,7 +7,7 @@ import {
   saveBalances, saveFinSettings, saveHolding,
   sumMap, toCad, updateProperty, yearLines,
 } from './finance'
-import { AccountsAnalytics, AssessmentChart, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
+import { AccountsAnalytics, AssessmentChart, PortfolioSnapshots, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
 import { RISK_LABEL } from './finAnalytics'
 import type { AccountKind, Cur, Finance, FinAccount, FinHolding, FinProperty, FinTransaction, Fx, TxKind } from './finance'
 
@@ -469,6 +469,8 @@ function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show
       </section>
 
       <InvestAnalytics f={f} fx={fx} show={show} />
+
+      <PortfolioSnapshots f={f} fx={fx} show={show} userId={userId} onDone={onDone} />
 
       {view === 'all' ? (
         <section className="sub-panel span-2">

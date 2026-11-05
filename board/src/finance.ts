@@ -35,6 +35,10 @@ export interface FinTransaction {
   id: string; account: string; posted_on: string; amount: number; currency: Cur; description: string
   kind: TxKind; line: string; reviewed: boolean; source: string
 }
+export interface FinSnapshotRow {
+  id: string; as_of: string; symbol: string; name: string; owner: string; account: string; asset_type: string
+  shares: number; price: number; price_date: string | null; currency: Cur; value_cad: number; source: string
+}
 export interface FinArchive { id: string; name: string; as_of: string | null; data: unknown[][] }
 export interface FinSettings {
   target?: { cash_months: number; safe_months: number; note?: string }
@@ -49,6 +53,7 @@ export interface Finance {
   history: FinHistory[]; archive: FinArchive[]; settings: FinSettings
   holdings: FinHolding[]; prices: Record<string, Quote>
   transactions: FinTransaction[]
+  snapshots: FinSnapshotRow[]
 }
 
 const n = (v: unknown) => (v === null || v === undefined ? null : Number(v))
@@ -65,7 +70,7 @@ async function all<T>(table: string, order: string): Promise<T[]> {
 }
 
 export async function loadFinance(): Promise<Finance> {
-  const [accounts, balances, properties, ie, history, archive, settings, holdingRows, txRows] = await Promise.all([
+  const [accounts, balances, properties, ie, history, archive, settings, holdingRows, txRows, snapRows] = await Promise.all([
     all<FinAccount>('fin_accounts', 'sort'),
     all<FinBalance>('fin_balances', 'as_of'),
     all<FinProperty>('fin_properties', 'sort'),
@@ -75,6 +80,7 @@ export async function loadFinance(): Promise<Finance> {
     supabase.from('fin_settings').select('data').maybeSingle(),
     all<FinHolding>('fin_holdings', 'symbol'),
     all<FinTransaction>('fin_transactions', 'posted_on'),
+    all<FinSnapshotRow>('fin_portfolio_snapshots', 'as_of'),
   ])
   const transactions = txRows.map((t) => ({ ...t, amount: Number(t.amount) }))
   if (settings.error) throw settings.error
@@ -89,6 +95,7 @@ export async function loadFinance(): Promise<Finance> {
     })),
     ie: [...ie.map((r) => ({ ...r, amount: Number(r.amount), covers_months: Number(r.covers_months || 1) })), ...txToIe(transactions)],
     transactions,
+    snapshots: snapRows.map((r) => ({ ...r, shares: Number(r.shares), price: Number(r.price), value_cad: Number(r.value_cad) })),
     history: history.map((h) => ({ ...h, amount: Number(h.amount) })),
     archive,
     settings: (settings.data?.data ?? {}) as FinSettings,
@@ -290,4 +297,21 @@ export function mix(w: Worth, s: FinSettings, spendCad: number): Mix {
     cashTarget: cashMonths * spendCad,
     safeTarget: safeMonths * spendCad,
   }
+}
+
+// Save today's holdings at live prices as a portfolio snapshot (one row per holding).
+export async function savePortfolioSnapshot(userId: string, f: Finance, fx: Fx, asOf: string): Promise<number> {
+  const acct = new Map(f.accounts.map((a) => [a.id, a]))
+  const rows = f.holdings.map((h) => {
+    const a = acct.get(h.account_id)
+    const price = holdingPrice(f, h)
+    return {
+      user_id: userId, as_of: asOf, symbol: h.symbol, name: h.name, owner: a?.owner ?? '', account: a ? `${a.institution} ${a.name}` : '',
+      asset_type: h.asset_type, shares: h.shares, price, price_date: asOf, currency: h.currency,
+      value_cad: Math.round(toCad(h.shares * price, h.currency, fx) * 100) / 100, source: 'saved',
+    }
+  })
+  const { error } = await supabase.from('fin_portfolio_snapshots').upsert(rows, { onConflict: 'user_id,as_of,symbol,account' })
+  if (error) throw error
+  return rows.length
 }

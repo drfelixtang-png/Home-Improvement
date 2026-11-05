@@ -480,3 +480,6 @@ a.q-link span { font-size: 0.8em; color: var(--muted); }
 
 .fin-chart .apt.s4 { fill: #b79ce0; } .key-line.s4 { border-color: #b79ce0; }
 .fin-chart .apt.s5 { fill: #6fd3cf; } .key-line.s5 { border-color: #6fd3cf; }
+
+.fin-chart .bar-seg { stroke: var(--panel-2); stroke-width: 1; }
+.fin-chart .bar-seg.c0 { fill: #f0b44c; } .fin-chart .bar-seg.c1 { fill: #8fb8de; } .fin-chart .bar-seg.c2 { fill: #5fcf8f; } .fin-chart .bar-seg.c3 { fill: #e07a6b; }
