@@ -434,3 +434,5 @@ a.q-link span { font-size: 0.8em; color: var(--muted); }
 .fin-view button { font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
 .fin-view button.on { color: var(--fg); border-color: var(--accent); }
 .fin p.span-2 { margin: 0; }
+.fin-cat { font: inherit; font-size: 0.82rem; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; max-width: 100%; }
+.fin-similar { display: flex; align-items: center; gap: 4px; margin-top: 4px; }

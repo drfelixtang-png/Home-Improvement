@@ -26,6 +26,11 @@ export interface FinHolding {
   id: string; account_id: string; symbol: string; name: string; name_zh: string
   shares: number; currency: Cur; last_price: number | null; updated_at: string
 }
+export type TxKind = 'income' | 'expense' | 'transfer' | 'capital'
+export interface FinTransaction {
+  id: string; account: string; posted_on: string; amount: number; currency: Cur; description: string
+  kind: TxKind; line: string; reviewed: boolean; source: string
+}
 export interface FinArchive { id: string; name: string; as_of: string | null; data: unknown[][] }
 export interface FinSettings {
   target?: { cash_months: number; safe_months: number; note?: string }
@@ -39,6 +44,7 @@ export interface Finance {
   accounts: FinAccount[]; balances: FinBalance[]; properties: FinProperty[]; ie: FinIe[]
   history: FinHistory[]; archive: FinArchive[]; settings: FinSettings
   holdings: FinHolding[]; prices: Record<string, Quote>
+  transactions: FinTransaction[]
 }
 
 const n = (v: unknown) => (v === null || v === undefined ? null : Number(v))
@@ -55,7 +61,7 @@ async function all<T>(table: string, order: string): Promise<T[]> {
 }
 
 export async function loadFinance(): Promise<Finance> {
-  const [accounts, balances, properties, ie, history, archive, settings, holdingRows] = await Promise.all([
+  const [accounts, balances, properties, ie, history, archive, settings, holdingRows, txRows] = await Promise.all([
     all<FinAccount>('fin_accounts', 'sort'),
     all<FinBalance>('fin_balances', 'as_of'),
     all<FinProperty>('fin_properties', 'sort'),
@@ -64,7 +70,9 @@ export async function loadFinance(): Promise<Finance> {
     all<FinArchive>('fin_archive', 'as_of'),
     supabase.from('fin_settings').select('data').maybeSingle(),
     all<FinHolding>('fin_holdings', 'symbol'),
+    all<FinTransaction>('fin_transactions', 'posted_on'),
   ])
+  const transactions = txRows.map((t) => ({ ...t, amount: Number(t.amount) }))
   if (settings.error) throw settings.error
   const holdings = holdingRows.map((h) => ({ ...h, shares: Number(h.shares), last_price: n(h.last_price) })).filter((h) => h.shares > 0)
   return {
@@ -75,11 +83,27 @@ export async function loadFinance(): Promise<Finance> {
     properties: properties.map((p) => ({
       ...p, share: Number(p.share), value: n(p.value), mortgage: Number(p.mortgage ?? 0), sale_price: n(p.sale_price), cost: n(p.cost),
     })),
-    ie: ie.map((r) => ({ ...r, amount: Number(r.amount), covers_months: Number(r.covers_months || 1) })),
+    ie: [...ie.map((r) => ({ ...r, amount: Number(r.amount), covers_months: Number(r.covers_months || 1) })), ...txToIe(transactions)],
+    transactions,
     history: history.map((h) => ({ ...h, amount: Number(h.amount) })),
     archive,
     settings: (settings.data?.data ?? {}) as FinSettings,
   }
+}
+
+// Bank statement rows that count as income or spending, as monthly lines.
+// Spending is stored as money out (negative), so it is flipped; refunds then reduce spending.
+export function txToIe(tx: FinTransaction[]): FinIe[] {
+  return tx.filter((t) => t.kind === 'income' || t.kind === 'expense').map((t) => ({
+    id: `tx-${t.id}`, month: `${t.posted_on.slice(0, 7)}-01`, kind: t.kind as 'income' | 'expense', line: t.line,
+    amount: t.kind === 'expense' ? -t.amount : t.amount, currency: t.currency, covers_months: 1, source: 'statement', note: '',
+  }))
+}
+
+export async function updateTransactions(ids: string[], patch: Partial<Pick<FinTransaction, 'kind' | 'line' | 'reviewed'>>): Promise<void> {
+  if (!ids.length) return
+  const { error } = await supabase.from('fin_transactions').update(patch).in('id', ids)
+  if (error) throw error
 }
 
 // ------------------------------------------------------------------ writes
