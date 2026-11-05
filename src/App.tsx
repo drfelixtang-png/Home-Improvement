@@ -24,28 +24,43 @@ function Header() {
     ['history', t('navHistory')],
     ['settings', t('navSettings')],
   ]
+  const now = new Date()
   return (
     <header className="header no-print">
-      <div className="header-top">
-        <a className="brand" href="#/">
-          {t('appName')}
-        </a>
-        <nav className="app-switch" aria-label={t('switchApp')}>
-          <a href={`${BOARD_URL}#/${fromBoard ? 'stockpile' : ''}`} className={fromBoard ? 'back' : ''}>
-            {fromBoard ? `← ${t('backToBoard')}` : t('morningBoard')}
-          </a>
-          <span className="here" aria-current="page">
-            {t('stockpileShort')}
-          </span>
-        </nav>
-        <button className="lang" onClick={() => setLang(lang === 'en' ? 'zh-Hant' : 'en')}>
-          {t('languageToggle')}
-        </button>
+      <div className="hdr">
+        <div className="greet">
+          <h1>
+            <a href="#/">Stockpile Tracker</a> <span className="tc">家居儲備</span>
+          </h1>
+          <div className="date">
+            {now.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            {' · '}
+            <span className="tc">{now.toLocaleDateString('zh-HK', { month: 'long', day: 'numeric', weekday: 'long' })}</span>
+          </div>
+        </div>
+        <div className="hdr-right">
+          <nav className="app-switch" aria-label={t('switchApp')}>
+            <a href={`${BOARD_URL}#/${fromBoard ? 'stockpile' : ''}`} className={fromBoard ? 'back' : ''}>
+              {fromBoard ? '← ' : ''}Morning Board <span className="tc">晨報</span>
+            </a>
+            <span className="here" aria-current="page">
+              Stockpile <span className="tc">儲備</span>
+            </span>
+          </nav>
+          <div className="lang-seg" role="group" aria-label={t('language')}>
+            <button type="button" aria-pressed={lang === 'zh-Hant'} className={lang === 'zh-Hant' ? 'on' : ''} onClick={() => setLang('zh-Hant')}>
+              中文
+            </button>
+            <button type="button" aria-pressed={lang === 'en'} className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>
+              EN
+            </button>
+          </div>
+        </div>
       </div>
       {session && (
-        <nav className="nav">
+        <nav className="tabs-bar" aria-label={t('appName')}>
           {nav.map(([path, label]) => (
-            <a key={path} href={`#/${path}`} className={top === path || (path === '' && top === 'item') ? 'active' : ''}>
+            <a key={path} href={`#/${path}`} className={top === path || (path === '' && top === 'item') ? 'on' : ''}>
               {label}
             </a>
           ))}
