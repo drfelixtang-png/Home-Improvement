@@ -11,8 +11,35 @@ function money(v: number): string {
 }
 const pct = (x: number | null | undefined, digits = 0) => (x === null || x === undefined || !Number.isFinite(x) ? '-' : `${(x * 100).toFixed(digits)}%`)
 
-// A stacked bar and a table of label, amount and share.
-export function Breakdown({ title, items, show, note, max = 12 }: { title: string; items: Slice[]; show: boolean; note?: string; max?: number }) {
+// A pie (drawn as a ring) with the largest share in the middle.
+function Pie({ rows, sum, title, tone }: { rows: Slice[]; sum: number; title: string; tone: (r: Slice, i: number) => number }) {
+  let at = 0
+  const top = rows.reduce((a, b) => (b.value > a.value ? b : a), rows[0])
+  return (
+    <svg className="fin-pie" viewBox="0 0 42 42" role="img" aria-label={`${title}: ${rows.map((r) => `${r.label} ${pct(r.value / sum)}`).join(', ')}`}>
+      <circle cx="21" cy="21" r="15.9155" className="pie-bg" />
+      {rows.map((r, i) => {
+        const share = (r.value / sum) * 100
+        const el = (
+          <circle key={r.label} cx="21" cy="21" r="15.9155" className={`pie-seg s${tone(r, i)}`}
+            strokeDasharray={`${Math.max(0, share - 0.4)} ${100 - Math.max(0, share - 0.4)}`} strokeDashoffset={25 - at}>
+            <title>{`${r.label} ${pct(r.value / sum, 1)}`}</title>
+          </circle>
+        )
+        at += share
+        return el
+      })}
+      {top && <text x="21" y="22.5" textAnchor="middle" className="pie-pct">{pct(top.value / sum)}</text>}
+      {top && <text x="21" y="27" textAnchor="middle" className="pie-lbl">{top.label.length > 14 ? `${top.label.slice(0, 13)}…` : top.label}</text>}
+    </svg>
+  )
+}
+
+// A pie and a table of label, amount and share.
+// Risk levels use their own colours: green for very low through red for very high, grey when not rated.
+const RISK_TONE: Record<string, number> = { '1': 12, '2': 13, '3': 14, '4': 15, '5': 16 }
+export function Breakdown({ title, items, show, note, max = 12, risk = false }: { title: string; items: Slice[]; show: boolean; note?: string; max?: number; risk?: boolean }) {
+  const tone = (r: Slice, i: number) => (risk ? RISK_TONE[r.label[0]] ?? 8 : i % 10)
   const pos = items.filter((x) => x.value > 0)
   const sum = pos.reduce((s, x) => s + x.value, 0)
   const neg = items.filter((x) => x.value < 0)
@@ -22,14 +49,13 @@ export function Breakdown({ title, items, show, note, max = 12 }: { title: strin
   return (
     <div className="fin-bd">
       <h4>{title}</h4>
-      <div className="fin-split" role="img" aria-label={`${title}: ${rows.map((r) => `${r.label} ${pct(r.value / sum)}`).join(', ')}`}>
-        {rows.map((r, i) => <span key={r.label} className={`seg c${i % 10}`} style={{ flex: r.value }} title={`${r.label} ${pct(r.value / sum)}`}>{r.value / sum >= 0.09 ? `${pct(r.value / sum)}` : ''}</span>)}
-      </div>
+      <div className="fin-bd-body">
+        <Pie rows={rows} sum={sum} title={title} tone={tone} />
       <table className="tbl fin-bd-tbl">
         <tbody>
           {rows.map((r, i) => (
             <tr key={r.label}>
-              <td><span className={`dot-c c${i % 10}`} aria-hidden="true" />{r.label}</td>
+              <td><span className={`dot-c c${tone(r, i)}`} aria-hidden="true" />{r.label}</td>
               <td className="n">{show ? money(r.value) : '••••'}</td>
               <td className="n">{pct(r.value / sum, 1)}</td>
             </tr>
@@ -37,6 +63,7 @@ export function Breakdown({ title, items, show, note, max = 12 }: { title: strin
           {neg.map((r) => <tr key={r.label} className="muted"><td>{r.label}</td><td className="n">{show ? money(r.value) : '••••'}</td><td className="n" /></tr>)}
         </tbody>
       </table>
+      </div>
       {note && <p className="sub">{note}</p>}
     </div>
   )
@@ -65,7 +92,7 @@ export function OverviewAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: b
         <Breakdown title="By owner 擁有人" items={o.byOwner} show={show} note="Felicia's money is included, as you chose; it is not yours to spend." />
         <Breakdown title="By currency 貨幣" items={o.byCurrency} show={show} note="Property and Canadian accounts are in CAD." />
         <Breakdown title="How quickly it can be used 流動性" items={o.byLiquidity} show={show} />
-        <Breakdown title="Risk of money outside property 風險" items={o.riskOfMoney} show={show} note="Cash and GICs count as 1. Each stock has its own rating under Investments. Accounts without a holdings list are not rated." />
+        <Breakdown title="Risk of money outside property 風險" items={o.riskOfMoney} show={show} risk note="Cash and GICs count as 1. Each stock has its own rating under Investments. Accounts without a holdings list are not rated." />
       </div>
       <p className="sub">The change since August 2024 compares with the old spreadsheet, which still had the Shuswap house and a mortgage on Railway Ave, and did not include Felicia&apos;s money.</p>
     </section>
@@ -89,7 +116,7 @@ export function InvestAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: boo
       </div>
       <div className="fin-bd-grid">
         <Breakdown title="By sector 行業" items={i.bySector} show={show} />
-        <Breakdown title="By risk level 風險" items={i.byRisk} show={show} note="1 very low (insured deposits), 2 low (utilities, REITs, stablecoin in a cold wallet), 3 medium (large established companies), 4 high (single China or emerging market stocks), 5 very high (crypto, troubled developers, newly listed). Change a rating with Edit under By account." />
+        <Breakdown title="By risk level 風險" items={i.byRisk} show={show} risk note="1 very low (insured deposits), 2 low (utilities, REITs, stablecoin in a cold wallet), 3 medium (large established companies), 4 high (single China or emerging market stocks), 5 very high (crypto, troubled developers, newly listed). Change a rating with Edit under By account." />
         <Breakdown title="By type 種類" items={i.byType} show={show} />
         <Breakdown title="By owner 擁有人" items={i.byOwner} show={show} />
       </div>
@@ -220,7 +247,7 @@ export function PropertyAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: b
           ))}
         </tbody>
       </table></div>
-      <p className="sub">Yield is the income in the last 12 months divided by your share of the value, before tax and before costs paid by the property. Railway Ave earns no rent because Thomson lives in the lower unit. Nassau Dr income is yours, but the property is not, so it has no yield. Add the previous assessed value under Edit to see the change for E 41st Ave.</p>
+      <p className="sub">Yield is the income in the last 12 months divided by your share of the value, before tax and before costs paid by the property. Railway Ave earns no rent because Thomson lives in the lower unit. Nassau Dr income is yours, but the property is not, so it has no yield.</p>
     </section>
   )
 }
