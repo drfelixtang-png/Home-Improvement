@@ -424,3 +424,13 @@ a.q-link span { font-size: 0.8em; color: var(--muted); }
 .pill.k-gic { background: #17352a; color: var(--good); }
 .pill.k-investment { background: var(--warn-bg); color: var(--warn); }
 .pill.k-credit_card { background: var(--crit-bg); color: var(--crit); }
+.fin-tabs a { font-size: 0.86rem; font-weight: 600; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; }
+.fin-tabs a.on { color: #131a22; background: var(--accent); border-color: var(--accent); }
+.fin-tabs a.on .tc { color: #131a22; }
+.fin-split .seg.m-HKD { background: #e07a6b; }
+.fin-split .seg.m-USD { background: #8fb8de; }
+.fin-split .seg.m-CAD { background: var(--good); }
+.fin-view { display: flex; gap: 6px; flex-wrap: wrap; }
+.fin-view button { font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+.fin-view button.on { color: var(--fg); border-color: var(--accent); }
+.fin p.span-2 { margin: 0; }

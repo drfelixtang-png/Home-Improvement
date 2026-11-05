@@ -179,8 +179,9 @@ function Board({ session }: { session: Session }) {
   const [hi, reloadHi] = useLoad<HomeItem[]>(loadHomeItems, [], true)
   const [al, reloadAl] = useLoad<Alerts>(loadAlerts, [], true)
   // Finance figures load only once the Finance page is opened.
-  const [finSeen, setFinSeen] = useState(route === 'finance')
-  useEffect(() => { if (route === 'finance') setFinSeen(true) }, [route])
+  const onFinance = route === 'finance' || route.startsWith('finance/')
+  const [finSeen, setFinSeen] = useState(onFinance)
+  useEffect(() => { if (onFinance) setFinSeen(true) }, [onFinance])
   const [fin, reloadFin] = useLoad<Finance>(loadFinance, [], finSeen)
   const [fx, reloadFx] = useLoad<Fx>(loadFx, [], finSeen)
   const watch = settings?.watchlist ?? []
@@ -240,7 +241,7 @@ function Board({ session }: { session: Session }) {
 
   const panel = PANELS[route]
   const page: 'today' | 'me' | 'review' | 'home' | 'finance' =
-    route === 'me' ? 'me' : route === 'review' ? 'review' : route === 'home' ? 'home' : route === 'finance' ? 'finance' : 'today'
+    route === 'me' ? 'me' : route === 'review' ? 'review' : route === 'home' ? 'home' : onFinance ? 'finance' : 'today'
   const alerts = al.data ? alertLines(al.data) : null
   const loudAlerts = (alerts ?? []).filter((a) => a.severity !== 'info')
   const homeDue = (hi.data ?? []).filter((i) => { const st = dueState(i, vanDate(now)).state; return st === 'overdue' || st === 'week' }).length
@@ -286,7 +287,7 @@ function Board({ session }: { session: Session }) {
 
       {page === 'finance' ? (
         fin.error ? <Problem msg={fin.error} /> : fin.data === undefined || fx.data === undefined ? <Loading /> : (
-          <FinancePage f={fin.data} fx={fx.data} userId={session.user.id} onReload={reloadFin} lang={lang} />
+          <FinancePage f={fin.data} fx={fx.data} userId={session.user.id} onReload={reloadFin} lang={lang} tab={route.split('/')[1] ?? 'overview'} />
         )
       ) : page === 'me' ? (
         settings ? wrap(ci, (d) => <MePage settings={settings} checkins={d} onReload={reloadCi} onSaveSettings={save} lang={lang} />) : <Loading />
