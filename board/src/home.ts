@@ -115,7 +115,7 @@ export function alertLines(a: Alerts): AlertLine[] {
   for (const w of a.weather?.data ?? []) {
     const t = (w.type ?? '').toLowerCase()
     const severity: Severity = t === 'warning' ? 'urgent' : t === 'watch' || t === 'advisory' ? 'soon' : 'info'
-    out.push({ severity, title: String(w.name ?? 'Weather alert').replace(/^\w/, (c) => c.toUpperCase()), title_zh: '天氣警告', detail: String(w.text ?? '').split('\n').filter(Boolean).slice(0, 3).join(' '), source: 'Environment Canada', url: 'https://weather.gc.ca/en/location/index.html?coords=49.135,-123.168' })
+    out.push({ severity, title: String(w.name ?? 'Weather alert').replace(/^\w/, (c) => c.toUpperCase()), title_zh: '天氣警告', detail: String(w.text ?? '').split('\n').filter(Boolean).slice(0, 3).join(' '), source: 'Environment Canada', url: 'https://weather.gc.ca/en/location/index.html?coords=49.1666,-123.1336' })
   }
   const now = Date.now()
   for (const q of a.quakes?.data ?? []) {
