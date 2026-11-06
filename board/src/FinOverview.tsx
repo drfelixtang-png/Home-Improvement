@@ -5,6 +5,8 @@ import type { Finance, Fx } from './finance'
 import { findIssues } from './finIssues'
 import type { Issue, Level } from './finIssues'
 import { useItems } from './itemHooks'
+import { downloadBackup } from './backup'
+import { saveFinSettings } from './finance'
 import { RecentCompare } from './FinRecent'
 
 const LEVEL: Record<Level, { label: string; zh: string; note: string }> = {
@@ -12,7 +14,7 @@ const LEVEL: Record<Level, { label: string; zh: string; note: string }> = {
   decide: { label: 'Decide', zh: '需要決定', note: 'A choice only you can make.' },
   watch: { label: 'Watch', zh: '留意', note: 'No action yet; keep an eye on it.' },
 }
-const TAB_NAME: Record<string, string> = { networth: 'Net worth', investments: 'Investments', accounts: 'Accounts', cashflow: 'Income and spending', property: 'Property', history: 'History' }
+const TAB_NAME: Record<string, string> = { overview: 'Overview', networth: 'Net worth', investments: 'Investments', accounts: 'Accounts', cashflow: 'Income and spending', property: 'Property', history: 'History' }
 
 function money(v: number): string {
   return `${v < 0 ? '−' : ''}CA$${Math.abs(v).toLocaleString('en-CA', { maximumFractionDigits: 0 })}`
@@ -44,7 +46,32 @@ function IssueCard({ i, show, hidden }: { i: Issue; show: boolean; hidden: boole
   )
 }
 
-export function FinOverview({ f, fx, show }: { f: Finance; fx: Fx; show: boolean }) {
+function BackupBox({ f, userId, onDone }: { f: Finance; userId: string; onDone: () => void }) {
+  const [msg, setMsg] = useState<string | null>(null)
+  const last = (f.settings as { last_backup?: string }).last_backup
+  const run = async () => {
+    setMsg('Preparing…')
+    try {
+      const r = await downloadBackup((m) => setMsg(m))
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
+      await saveFinSettings(userId, f.settings, { last_backup: today } as Partial<Finance['settings']>)
+      setMsg(`Saved ${r.file}: ${r.rows.toLocaleString('en-CA')} rows from ${r.tables} tables.`)
+      onDone()
+    } catch (e) { setMsg(`Could not make the backup: ${(e as Error).message}`) }
+  }
+  return (
+    <section className="sub-panel span-2">
+      <h3>Backup 備份 <span className="sub inline">{last ? `last downloaded ${last}` : 'never downloaded'}</span></h3>
+      <div className="form-row">
+        <button type="button" className="btn" onClick={run}>Download backup 下載備份</button>
+        {msg && <span className="sub" role="status">{msg}</span>}
+      </div>
+      <p className="sub">One file with all your board, finance and stockpile data. Keep it somewhere private, such as your computer or your own Google Drive, and keep a few older copies. The database plan does not make backups, so this file is the only copy outside the database.</p>
+    </section>
+  )
+}
+
+export function FinOverview({ f, fx, show, userId, onReload }: { f: Finance; fx: Fx; show: boolean; userId: string; onReload: () => void }) {
   const today = vanDate()
   const { isHidden } = useItems()
   const [showHidden, setShowHidden] = useState(false)
@@ -86,6 +113,8 @@ export function FinOverview({ f, fx, show }: { f: Finance; fx: Fx; show: boolean
           {showHidden && <ul className="fin-issues">{hidden.map((i) => <IssueCard key={i.key} i={i} show={show} hidden />)}</ul>}
         </section>
       )}
+      <BackupBox f={f} userId={userId} onDone={onReload} />
+
       <p className="sub span-2">Worked out from the figures on the other tabs each time the page opens. &quot;Done&quot; hides an issue until its numbers change enough to make it a new one; &quot;Hide 30 days&quot; brings it back after a month.</p>
     </div>
   </>)

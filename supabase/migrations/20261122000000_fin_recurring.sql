@@ -6,7 +6,7 @@ create table public.fin_recurring (
   name text not null,
   provider text not null default '',
   category text not null default 'Other',
-  place text not null default '',          -- property or person it is for, e.g. "10600 Railway Ave" or "Ruby"
+  place text not null default '',          -- property or person it is for, e.g. a home address or a family member
   amount numeric,                          -- usual amount per payment, CAD
   frequency text not null default 'monthly' check (frequency in ('monthly', 'bimonthly', 'quarterly', 'semiannual', 'yearly')),
   autopay boolean,

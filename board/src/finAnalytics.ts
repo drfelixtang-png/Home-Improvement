@@ -1,6 +1,6 @@
 // Finance analytics: the sums behind the breakdowns on each Finance tab. All amounts are in CAD.
 import {
-  addMonth, holdingPrice, holdingsOf, latestBalances, monthly, monthsBack, netWorth, sumMap, toCad,
+  addMonth, ownerName, holdingPrice, holdingsOf, latestBalances, monthly, monthsBack, netWorth, sumMap, toCad,
 } from './finance'
 import type { Cur, Finance, FinAccount, FinHolding, Fx } from './finance'
 
@@ -14,7 +14,6 @@ const slices = (m: Map<string, number>, sort = true): Slice[] => {
 export const total = (xs: Slice[]) => xs.reduce((s, x) => s + x.value, 0)
 export const isCrypto = (h: FinHolding) => h.asset_type === 'crypto' || h.asset_type === 'stablecoin'
 export const shortAddress = (a: string) => a.split(',')[0]
-export const OWNER_NAME: Record<string, string> = { felix: 'Felix', norina: 'Norina', felicia: 'Felicia (managed)', norinian: 'Norinian (managed by Norina)', joint: 'Joint' }
 
 // Every piece of the net worth, in CAD, with the facts the breakdowns need.
 interface Piece {
@@ -75,11 +74,11 @@ export function overview(f: Finance, fx: Fx) {
   const money = ps.filter((p) => p.owner !== 'property')
   const rated = money.filter((p) => p.risk !== null && p.value > 0)
   const riskAvg = rated.reduce((s, p) => s + p.value * (p.risk ?? 0), 0) / (total(rated.map((p) => ({ label: '', value: p.value }))) || 1)
-  const home = w.properties.find((x) => x.p.key === 'railway')?.equity ?? 0
+  const home = w.properties.find((x) => x.p.details?.primary_home)?.equity ?? 0
   return {
     total: w.total,
     byClass: group(ps, (p) => p.cls),
-    byOwner: group(ps, (p) => (p.owner === 'property' ? 'Shared property' : OWNER_NAME[p.owner] ?? p.owner)),
+    byOwner: group(ps, (p) => (p.owner === 'property' ? 'Shared property' : ownerName(p.owner, true))),
     byCurrency: group(ps, (p) => p.currency),
     byLiquidity: group(ps, (p) => p.liquidity),
     riskOfMoney: byRiskOrder(group(money, (p) => riskLabel(p.risk))),
@@ -117,7 +116,7 @@ export function investments(f: Finance, fx: Fx) {
     bySector: group(inv, (p) => p.sector),
     byRisk: byRiskOrder(group(inv, (p) => riskLabel(p.risk))),
     byType: group(inv, (p) => ({ stock: 'Single stocks', reit: 'REITs', fund: 'Funds', crypto: 'Crypto', stablecoin: 'Stablecoins', bond: 'Bonds', investment: 'Accounts without a holdings list' } as Record<string, string>)[p.type] ?? 'Other'),
-    byOwner: group(inv, (p) => OWNER_NAME[p.owner] ?? p.owner),
+    byOwner: group(inv, (p) => ownerName(p.owner, true)),
     byCurrency: group(inv, (p) => p.currency),
     top1: sorted[0] ? { name: sorted[0].label, pct: sorted[0].value / (sum || 1) } : null,
     top5: total(sorted.slice(0, 5)) / (sum || 1),
@@ -184,7 +183,7 @@ const CATEGORY: [RegExp, string][] = [
   [/Allowance/i, 'Family support'],
   [/^Cash/i, 'Cash withdrawals'],
   [/Credit Card/i, 'Card spending, not itemised'],
-  [/Rental licences|Norina temp work/i, 'Work and rental costs'],
+  [/Rental licences|temp work/i, 'Work and rental costs'],
 ]
 export const categoryOf = (line: string) => CATEGORY.find(([re]) => re.test(line))?.[1] ?? 'Other'
 const FIXED = new Set(['Housing', 'Utilities and phone', 'Insurance and health', 'Taxes', 'Education'])
@@ -227,7 +226,6 @@ export function cashflow(f: Finance, fx: Fx, period: string, today: string) {
 }
 
 // ------------------------------------------------------------------ property
-const PROPERTY_INCOME: Record<string, string> = { e41st: 'E 41st Ave distribution', nassau: 'Nassau Airbnb' }
 export function property(f: Finance, fx: Fx, today: string) {
   const w = netWorth(f, fx)
   const months = monthsBack(addMonth(today.slice(0, 7), -1), 12)
@@ -235,7 +233,7 @@ export function property(f: Finance, fx: Fx, today: string) {
   const income12 = (line?: string) => (line ? months.reduce((s, m) => s + (inc.get(m)?.get(line) ?? 0), 0) : 0)
   return f.properties.map((p) => {
     const equity = p.status === 'held' ? ((p.value ?? 0) - p.mortgage) * p.share : 0
-    const yearIncome = income12(PROPERTY_INCOME[p.key])
+    const yearIncome = income12(typeof p.details?.income_line === 'string' ? p.details.income_line : undefined)
     return {
       p, equity, pctOfWorth: w.total ? equity / w.total : 0,
       change: p.prev_value && p.value ? (p.value - p.prev_value) / p.prev_value : null,

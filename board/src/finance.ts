@@ -48,6 +48,17 @@ export interface FinSettings {
   expense_lines?: string[]
 }
 
+// Display names for account owners, loaded from the private settings (never written in the code).
+export interface OwnerInfo { name: string; managed_by?: string }
+const owners: Record<string, OwnerInfo> = {}
+const titleCase = (k: string) => (k ? k[0].toUpperCase() + k.slice(1) : '')
+export const ownerName = (key: string, withManager = false): string => {
+  const o = owners[key]
+  const n = o?.name ?? titleCase(key)
+  return withManager && o?.managed_by ? `${n} (managed by ${o.managed_by})` : n
+}
+export const ownerManager = (key: string): string | null => owners[key]?.managed_by ?? null
+
 export interface Finance {
   accounts: FinAccount[]; balances: FinBalance[]; properties: FinProperty[]; ie: FinIe[]
   history: FinHistory[]; archive: FinArchive[]; settings: FinSettings
@@ -84,6 +95,7 @@ export async function loadFinance(): Promise<Finance> {
   ])
   const transactions = txRows.map((t) => ({ ...t, amount: Number(t.amount) }))
   if (settings.error) throw settings.error
+  Object.assign(owners, ((settings.data?.data ?? {}) as { owners?: Record<string, OwnerInfo> }).owners ?? {})
   const holdings = holdingRows.map((h) => ({ ...h, shares: Number(h.shares), last_price: n(h.last_price), risk: h.risk === null ? null : Number(h.risk) })).filter((h) => h.shares > 0)
   return {
     holdings,

@@ -99,7 +99,13 @@ export interface Alerts {
   fetchedAt: string
 }
 
-export const loadAlerts = () => feeds<Alerts>('kind=alerts')
+// The home location is kept in the private household record and passed to the feed when asked.
+export async function loadAlerts(): Promise<Alerts> {
+  const h = await loadHousehold()
+  const home = h?.home as { lat?: number; lon?: number } | undefined
+  const at = home?.lat && home?.lon ? `&lat=${home.lat}&lon=${home.lon}` : ''
+  return feeds<Alerts>(`kind=alerts${at}`)
+}
 
 export interface AlertLine { severity: Severity; title: string; title_zh: string; detail?: string; url?: string; source: string }
 

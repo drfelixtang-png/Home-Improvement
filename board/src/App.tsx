@@ -124,11 +124,12 @@ const PANELS: Record<string, { title: string; zh: string }> = {
   news: { title: 'News', zh: '新聞' },
 }
 
-function greeting(now: Date): [string, string] {
+function greeting(now: Date, name: string): [string, string] {
+  const to = name ? `, ${name}` : ''
   const h = Number(clock(now, VAN).slice(0, 2))
-  if (h < 12) return ['Good morning, Felix', '早晨']
-  if (h < 18) return ['Good afternoon, Felix', '午安']
-  return ['Good evening, Felix', '晚安']
+  if (h < 12) return [`Good morning${to}`, '早晨']
+  if (h < 18) return [`Good afternoon${to}`, '午安']
+  return [`Good evening${to}`, '晚安']
 }
 
 // ================================================================= summary language
@@ -240,6 +241,7 @@ function Board({ session }: { session: Session }) {
   }
 
   const panel = PANELS[route]
+  const myName = hh.data?.people.find((p) => p.relation === 'self')?.name ?? ''
   const page: 'today' | 'me' | 'review' | 'home' | 'finance' =
     route === 'me' ? 'me' : route === 'review' ? 'review' : route === 'home' ? 'home' : onFinance ? 'finance' : 'today'
   const alerts = al.data ? alertLines(al.data) : null
@@ -254,7 +256,7 @@ function Board({ session }: { session: Session }) {
     <div className="app">
       <header className="top">
         <div className="greet">
-          <h1>{greeting(now)[0]} <span className="tc">{greeting(now)[1]}</span></h1>
+          <h1>{greeting(now, myName)[0]} <span className="tc">{greeting(now, myName)[1]}</span></h1>
           <div className="date">
             {now.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: VAN })}
             {' · '}
