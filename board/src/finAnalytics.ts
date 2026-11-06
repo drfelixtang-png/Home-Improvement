@@ -184,9 +184,10 @@ const CATEGORY: [RegExp, string][] = [
   [/^Cash/i, 'Cash withdrawals'],
   [/Credit Card/i, 'Card spending, not itemised'],
   [/Rental licences|temp work/i, 'Work and rental costs'],
+  [/Subscription/i, 'Subscriptions'],
 ]
 export const categoryOf = (line: string) => CATEGORY.find(([re]) => re.test(line))?.[1] ?? 'Other'
-const FIXED = new Set(['Housing', 'Utilities and phone', 'Insurance and health', 'Taxes', 'Education'])
+const FIXED = new Set(['Housing', 'Utilities and phone', 'Insurance and health', 'Taxes', 'Education', 'Subscriptions'])
 export const incomeType = (line: string) =>
   /Investment income|distribution|Airbnb|Rental|^I\(/i.test(line) ? 'Passive (investments and rentals)' : /work|^E\(|^S\(|commission/i.test(line) ? 'Work' : 'Other'
 
