@@ -30,7 +30,7 @@ const KIND: Record<AccountKind, [string, string]> = {
   cash: ['Cash', '現金'], gic: ['GIC', '定期'], investment: ['Investment', '投資'],
   credit_card: ['Credit card', '信用卡'], loan: ['Loan', '貸款'], other: ['Other', '其他'],
 }
-const OWNER: Record<string, string> = { felix: 'Felix', norina: 'Norina', joint: 'Joint', felicia: 'Felicia' }
+const OWNER: Record<string, string> = { felix: 'Felix', norina: 'Norina', joint: 'Joint', felicia: 'Felicia', norinian: 'Norinian' }
 const STATUS: Record<FinProperty['status'], string> = { held: 'Owned', sold: 'Sold', operated: 'Run, not owned', record: 'Family, record only' }
 
 function money(v: number, digits = 0): string {
@@ -613,7 +613,7 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
           <h3>What we own 資產組成</h3>
           <ul className="kv">
             {w.properties.map(({ p, equity }) => <li key={p.id}><span>{p.address}{p.share < 1 ? ` (${Math.round(p.share * 100)}%)` : ''}</span><b>{M(equity)}</b></li>)}
-            {w.byOwner.map((o) => <li key={o.owner}><span>{OWNER[o.owner] ?? o.owner}&apos;s accounts{o.owner === 'felicia' && <span className="sub inline"> managed by Felix</span>}</span><b>{M(o.total)}</b></li>)}
+            {w.byOwner.map((o) => <li key={o.owner}><span>{OWNER[o.owner] ?? o.owner}&apos;s accounts{o.owner === 'felicia' && <span className="sub inline"> managed by Felix</span>}{o.owner === 'norinian' && <span className="sub inline"> managed by Norina</span>}</span><b>{M(o.total)}</b></li>)}
             <li><span>Owing on credit cards and loans <span className="sub inline">already counted above</span></span><b>{M(w.debt)}</b></li>
             <li className="total"><span>Net worth</span><b>{M(w.total)}</b></li>
           </ul>
