@@ -16,7 +16,7 @@ export function itemKey(scope: string, it: Keyed): string {
 
 export interface Ctx {
   isHidden: (key: string) => boolean
-  mark: (key: string, title: string, status: 'done' | 'snoozed') => void
+  mark: (key: string, title: string, status: 'done' | 'snoozed', until?: string) => void
   undo: (key: string) => void
   showHidden: boolean
   setShowHidden: (v: boolean) => void
