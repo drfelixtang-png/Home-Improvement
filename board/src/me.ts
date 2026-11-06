@@ -97,20 +97,53 @@ export interface HabitStatus {
   warning_zh: string | null
 }
 
+// Minutes after noon, so that 23:45 comes before 00:30.
+const lateness = (t: string) => { const [h, m] = t.split(':').map(Number); return (h < 12 ? h + 24 : h) * 60 + m - 720 }
+
 export function habitStatus(habit: Habit, byDay: Map<string, Checkin>, today: string): HabitStatus {
   const markOf = (day: string): DayMark => {
+    if (habit.auto === 'bedtime') {
+      // The night of `day` is recorded as the bed time in the next morning's check-in.
+      const bed = byDay.get(addDays(day, 1))?.bed_time
+      if (bed) return lateness(bed) <= lateness(habit.by ?? '00:30') ? 'done' : 'missed'
+      return day >= addDays(today, -1) ? 'today' : 'unknown'
+    }
     const c = byDay.get(day)
     if (c?.habits[habit.key]) return 'done'
     if (day === today) return 'today'
     if (!c?.evening_at) return 'unknown'
     return 'missed'
   }
-  const grid = Array.from({ length: 28 }, (_, i) => addDays(today, i - 27)).map((day) => ({ day, mark: markOf(day) }))
   const ws = weekStart(today)
-  const thisWeek = grid.filter((g) => g.day >= ws && g.mark === 'done').length
+  const countWeek = (w: string) => Array.from({ length: 7 }, (_, k) => addDays(w, k)).filter((d) => d <= today && markOf(d) === 'done').length
   let streak = 0
   let warning: string | null = null
   let warning_zh: string | null = null
+
+  if (habit.every === 'week') {
+    // One cell per week for the last 8 weeks; never miss two weeks in a row.
+    const target = Math.max(1, habit.per_week)
+    const weeks = Array.from({ length: 8 }, (_, i) => addDays(ws, (i - 7) * 7))
+    const weekMark = (w: string): DayMark => {
+      if (countWeek(w) >= target) return 'done'
+      if (w === ws) return 'today'
+      const any = Array.from({ length: 7 }, (_, k) => byDay.get(addDays(w, k))?.evening_at).some(Boolean)
+      return any ? 'missed' : 'unknown'
+    }
+    const grid = weeks.map((w) => ({ day: w, mark: weekMark(w) }))
+    const thisWeek = countWeek(ws)
+    let w = weekMark(ws) === 'done' ? ws : addDays(ws, -7)
+    while (weekMark(w) === 'done' && streak < 520) { streak++; w = addDays(w, -7) }
+    if (thisWeek < target) {
+      const last = weekMark(addDays(ws, -7)), before = weekMark(addDays(ws, -14))
+      if (last !== 'done' && before !== 'done' && last !== 'unknown') { warning = 'Missed 2 weeks. Do it this week.'; warning_zh = '已經兩星期未做，本週一定要做。' }
+      else if (last === 'missed') { warning = 'Missed last week. Do not miss two weeks.'; warning_zh = '上週未做，本週不要再錯過。' }
+    }
+    return { habit, grid, streak, thisWeek, warning, warning_zh }
+  }
+
+  const grid = Array.from({ length: 28 }, (_, i) => addDays(today, i - 27)).map((day) => ({ day, mark: markOf(day) }))
+  const thisWeek = grid.filter((g) => g.day >= ws && g.mark === 'done').length
 
   if (habit.per_week >= 7) {
     // Count back from yesterday (today still counts if already done).

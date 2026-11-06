@@ -111,7 +111,9 @@ function Morning({ day, c, prev, onSaved }: { day: string; c: Checkin; prev: Che
 }
 
 // ================================================================= evening
-function Evening({ day, c, habits, areas, onSaved }: { day: string; c: Checkin; habits: Habit[]; areas: Area[]; onSaved: () => void }) {
+function Evening({ day, c, habits, areas, onSaved, byDay }: { day: string; c: Checkin; habits: Habit[]; areas: Area[]; onSaved: () => void; byDay: Map<string, Checkin> }) {
+  // Times a weekly habit was ticked earlier this week (today's saved tick included).
+  const weekDone = (h: Habit) => Array.from({ length: 7 }, (_, k) => addDays(weekStart(day), k)).filter((d) => d <= day && byDay.get(d)?.habits[h.key]).length
   const [f, setF] = useState(c)
   const [msg, setMsg] = useState<string | null>(null)
   const pri = f.priorities.filter((p) => p.trim())
@@ -143,12 +145,27 @@ function Evening({ day, c, habits, areas, onSaved }: { day: string; c: Checkin; 
       <fieldset className="field">
         <legend className="field-l">Habits done today 今日習慣</legend>
         <div className="check-grid">
-          {habits.map((h) => (
+          {habits.filter((h) => !h.auto && h.every !== 'week').map((h) => (
             <label key={h.key} className="check"><input type="checkbox" checked={!!f.habits[h.key]}
               onChange={(e) => setF({ ...f, habits: { ...f.habits, [h.key]: e.target.checked } })} /> {h.label} <span className="tc">{h.label_zh}</span></label>
           ))}
         </div>
       </fieldset>
+      {habits.some((h) => !h.auto && h.every === 'week') && (
+        <fieldset className="field">
+          <legend className="field-l">Weekly habits 每週習慣 <span className="sub inline">tick on the day you do it</span></legend>
+          <div className="check-grid">
+            {habits.filter((h) => !h.auto && h.every === 'week').map((h) => {
+              const done = weekDone(h)
+              return (
+                <label key={h.key} className="check"><input type="checkbox" checked={!!f.habits[h.key]}
+                  onChange={(e) => setF({ ...f, habits: { ...f.habits, [h.key]: e.target.checked } })} /> {h.label} <span className="tc">{h.label_zh}</span>
+                  <span className="sub inline"> this week {done + (f.habits[h.key] && !c.habits[h.key] ? 1 : 0)}/{Math.max(1, h.per_week)}</span></label>
+              )
+            })}
+          </div>
+        </fieldset>
+      )}
       <fieldset className="field">
         <legend className="field-l">Where your time went, hours 時間分配 <span className="sub inline">Total {total} h</span></legend>
         <div className="hours-grid">
@@ -193,13 +210,13 @@ function Habits({ habits, byDay, today, lang }: { habits: Habit[]; byDay: Map<st
           const s = habitStatus(h, byDay, today)
           return (
             <li key={h.key}>
-              <div className="h-name">{h.label} <span className="tc">{h.label_zh}</span><span className="sub">{h.per_week >= 7 ? 'Every day' : `${h.per_week} days a week`}</span></div>
-              <div className="h-grid" aria-label={`${h.label}, last 28 days`}>
-                {s.grid.map((g) => <span key={g.day} className={`hd ${g.mark}`} title={`${g.day}: ${g.mark}`} />)}
+              <div className="h-name">{h.label} <span className="tc">{h.label_zh}</span><span className="sub">{h.every === 'week' ? (h.per_week > 1 ? `${h.per_week} times a week` : 'Once a week') : h.per_week >= 7 ? 'Every day' : `${h.per_week} days a week`}{h.auto === 'bedtime' ? ' · from your bed time each morning' : ''}</span></div>
+              <div className={`h-grid ${h.every === 'week' ? 'weeks' : ''}`} aria-label={`${h.label}, last ${h.every === 'week' ? '8 weeks' : '28 days'}`}>
+                {s.grid.map((g) => <span key={g.day} className={`hd ${g.mark}`} title={`${h.every === 'week' ? `Week of ${g.day}` : g.day}: ${g.mark}`} />)}
               </div>
               <div className="h-stat">
-                <b>{s.streak}</b><span>{h.per_week >= 7 ? 'day streak' : 'week streak'}</span>
-                <span className="sub">This week {s.thisWeek}/{h.per_week >= 7 ? 7 : h.per_week}</span>
+                <b>{s.streak}</b><span>{h.per_week >= 7 && h.every !== 'week' ? 'day streak' : 'week streak'}</span>
+                <span className="sub">This week {s.thisWeek}/{h.every === 'week' ? Math.max(1, h.per_week) : h.per_week >= 7 ? 7 : h.per_week}</span>
               </div>
               {s.warning && <p className="h-warn">{lang === 'zh' ? s.warning_zh : s.warning}</p>}
             </li>
@@ -297,7 +314,7 @@ export function MePage({ settings, checkins, onReload, onSaveSettings, lang }: {
   const areas = settings.areas ?? []
 
   const morning = <Morning key={`m-${day}`} day={day} c={c} prev={prev} onSaved={onReload} />
-  const evening = <Evening key={`e-${day}`} day={day} c={c} habits={habits} areas={areas} onSaved={onReload} />
+  const evening = <Evening key={`e-${day}`} day={day} c={c} habits={habits} areas={areas} onSaved={onReload} byDay={byDay} />
 
   return (
     <main className="detail me">

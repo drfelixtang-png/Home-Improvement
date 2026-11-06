@@ -170,7 +170,13 @@ export interface BoardSettings {
 /** A life area, with the hours a week Felix wants to give it. */
 export interface Area { key: string; label: string; label_zh: string; target: number }
 /** A habit and how many days a week it should happen (7 = every day). */
-export interface Habit { key: string; label: string; label_zh: string; per_week: number }
+export interface Habit {
+  key: string; label: string; label_zh: string
+  per_week: number // daily habits: days a week; weekly habits: times a week
+  every?: 'day' | 'week' // 'week': checked as a weekly target (for example, see a friend once a week)
+  auto?: 'bedtime' // filled in from the bed time entered the next morning; no evening tick box
+  by?: string // for auto 'bedtime': latest time to be in bed, 'HH:MM' (after midnight is fine, e.g. '00:30')
+}
 
 export async function loadSettings(): Promise<BoardSettings> {
   await supabase.from('board_settings').upsert({}, { onConflict: 'user_id', ignoreDuplicates: true })
