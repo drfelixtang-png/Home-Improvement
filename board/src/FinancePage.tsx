@@ -8,6 +8,7 @@ import {
   sumMap, toCad, updateProperty, yearLines,
 } from './finance'
 import { FinOverview } from './FinOverview'
+import { YieldCheck } from './FinYield'
 import { BudgetEditor, Bills } from './FinRecent'
 import { AccountsAnalytics, AssessmentChart, PortfolioSnapshots, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
 import { RISK_LABEL } from './finAnalytics'
@@ -702,6 +703,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
             })}
           </div>
         </section>
+
+        <YieldCheck f={f} fx={fx} show={show} userId={userId} onDone={onReload} />
 
         <AccountsAnalytics f={f} fx={fx} show={show} />
       </div>
