@@ -506,3 +506,6 @@ a.q-link span { font-size: 0.8em; color: var(--muted); }
 .fin-budget { width: 7em; font: inherit; font-family: var(--mono); text-align: right; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; }
 
 .fin-questions { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; }
+
+.h-grid.weeks { grid-template-columns: repeat(8, 1fr); }
+.h-grid.weeks .hd { height: 14px; }
