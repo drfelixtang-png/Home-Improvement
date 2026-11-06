@@ -443,6 +443,14 @@ function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show
   }).sort((x, y) => y.cad - x.cad)
   const stocks = rows.reduce((s, r) => s + r.cad, 0)
   const move = rows.reduce((s, r) => s + r.move, 0)
+  // One line per investment: the same symbol in several accounts or for several people is added together.
+  const grouped = [...rows.reduce((m, r) => {
+    const g = m.get(r.h.symbol) ?? { ...r, shares: 0, cad: 0, value: 0, parts: [] as typeof rows }
+    g.shares += r.h.shares; g.cad += r.cad; g.value += r.h.shares * holdingPrice(f, r.h); g.parts.push(r)
+    m.set(r.h.symbol, g)
+    return m
+  }, new Map<string, (typeof rows)[number] & { shares: number; value: number; parts: typeof rows }>()).values()].sort((x, y) => y.cad - x.cad)
+  const place = (r: (typeof rows)[number]) => [r.a?.institution, r.a?.name].filter(Boolean).join(' ')
   // Investment accounts without a holdings list are valued from the last snapshot.
   const other = f.accounts.filter((a) => a.active && a.kind === 'investment' && !holdingsOf(f, a.id).length)
   const otherTotal = other.reduce((s, a) => s + toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx), 0)
@@ -456,7 +464,7 @@ function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show
     <div className="stats wide fin-stats">
       <div className="stat"><b>{M(total)}</b><span>All investments 總投資</span></div>
       <div className="stat"><b className={move < 0 ? 'dn' : move > 0 ? 'up' : ''}>{move ? `${move > 0 ? '+' : '−'}${show ? money(Math.abs(move)) : ''} ${Math.abs((move / (stocks - move || 1)) * 100).toFixed(2)}%` : '-'}</b><span>Today, listed stocks</span></div>
-      <div className="stat"><b>{rows.length}</b><span>Stocks in {stockAccounts.length} accounts</span></div>
+      <div className="stat"><b>{grouped.length}</b><span>Investments in {stockAccounts.length} accounts</span></div>
       {byOwner.map((x) => <div key={x.o} className="stat"><b>{M(x.v)}</b><span>{ownerName(x.o)}</span></div>)}
     </div>
 
@@ -478,21 +486,29 @@ function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show
 
       {view === 'all' ? (
         <section className="sub-panel span-2">
-          <h3>All stocks 全部持股 <span className="sub inline">largest first</span></h3>
+          <h3>All stocks 全部持股 <span className="sub inline">largest first; the same investment held in several accounts is shown once</span></h3>
           <div className="tbl-wrap"><table className="tbl">
             <thead><tr><th>Stock</th><th>Account</th><th className="n">Shares</th><th className="n">Price</th><th className="n">Today</th><th className="n">Value</th><th className="n">Share</th></tr></thead>
             <tbody>
-              {rows.map(({ h, a, q, cad }) => (
-                <tr key={h.id}>
+              {grouped.map(({ h, q, cad, shares, value, parts }) => {
+                const owners = [...new Set(parts.map((p) => p.a?.owner ?? ''))]
+                return (
+                <tr key={h.symbol}>
                   <td><a className="q-link" href={`https://finance.yahoo.com/quote/${encodeURIComponent(h.symbol)}/`} target="_blank" rel="noreferrer">{h.name}</a> <span className="tc">{h.name_zh !== h.name ? h.name_zh : ''}</span><span className="sub">{h.symbol}{!q && ' · stored price'}</span></td>
-                  <td>{a ? `${ownerName(a.owner)}` : ''}<span className="sub">{a?.institution}</span></td>
-                  <td className="n">{h.shares.toLocaleString('en-CA')}</td>
+                  <td>
+                    {owners.map((o) => ownerName(o)).join(', ')}
+                    {parts.length === 1
+                      ? <span className="sub">{parts[0].a?.institution}</span>
+                      : <span className="sub">{parts.length} places: {parts.map((p) => `${place(p)} ${p.h.shares.toLocaleString('en-CA')}`).join('; ')}</span>}
+                  </td>
+                  <td className="n">{shares.toLocaleString('en-CA')}</td>
                   <td className="n">{holdingPrice(f, h).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}<span className="sub">{h.currency}</span></td>
                   <td className={`n ${(q?.changePct ?? 0) < 0 ? 'dn' : (q?.changePct ?? 0) > 0 ? 'up' : ''}`}>{q?.changePct !== null && q?.changePct !== undefined ? `${q.changePct >= 0 ? '+' : '−'}${Math.abs(q.changePct).toFixed(2)}%` : '-'}</td>
-                  <td className="n">{M(cad)}{show && h.currency !== 'CAD' && <span className="sub">{orig(h.shares * holdingPrice(f, h), h.currency)}</span>}</td>
+                  <td className="n">{M(cad)}{show && h.currency !== 'CAD' && <span className="sub">{orig(value, h.currency)}</span>}</td>
                   <td className="n">{pctOf(cad, total)}%</td>
                 </tr>
-              ))}
+                )
+              })}
               {other.map((a) => (
                 <tr key={a.id} className="muted">
                   <td>{a.institution} {a.name}<span className="sub">no holdings list yet, value from the last snapshot</span></td>
