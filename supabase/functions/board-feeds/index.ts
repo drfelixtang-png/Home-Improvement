@@ -149,10 +149,17 @@ async function news(): Promise<Region[]> {
 }
 
 // ------------------------------------------------------------------ home alerts
-// Hazards near the house in Richmond, BC: weather warnings, earthquakes, power outages
-// and tsunami bulletins. Only fixed official sources; no caller input.
+// Hazards near home: weather warnings, earthquakes, power outages and tsunami bulletins.
+// Only fixed official sources. The caller may pass its home location (lat, lon), which is
+// checked to be in British Columbia; otherwise Richmond city centre is used.
 /* eslint-disable @typescript-eslint/no-explicit-any -- upstream JSON is untyped */
-const HOME = { lat: 49.135, lon: -123.168 }
+type Home = { lat: number; lon: number }
+const CITY: Home = { lat: 49.1666, lon: -123.1336 }
+function homeFrom(u: URL): Home {
+  const lat = Number(u.searchParams.get('lat')), lon = Number(u.searchParams.get('lon'))
+  if (lat >= 48 && lat <= 60.1 && lon >= -139.1 && lon <= -114) return { lat: Math.round(lat * 1000) / 1000, lon: Math.round(lon * 1000) / 1000 }
+  return CITY
+}
 
 function km(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const r = (d: number) => (d * Math.PI) / 180
@@ -166,7 +173,7 @@ async function getJson(url: string): Promise<unknown> {
   return r.json()
 }
 
-async function weatherAlerts() {
+async function weatherAlerts(HOME: Home) {
   const b = `${HOME.lon - 0.02},${HOME.lat - 0.02},${HOME.lon + 0.02},${HOME.lat + 0.02}`
   const d = (await getJson(`https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit=30&bbox=${b}`)) as any
   const now = Date.now()
@@ -187,7 +194,7 @@ async function weatherAlerts() {
   }))
 }
 
-async function quakes() {
+async function quakes(HOME: Home) {
   const d = (await getJson('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson')) as any
   return (d.features ?? []).map((f: any) => {
     const [lon, lat] = f.geometry.coordinates
@@ -195,7 +202,7 @@ async function quakes() {
   }).filter((q: any) => q.km <= 400).sort((a: any, b: any) => b.time - a.time).slice(0, 10)
 }
 
-async function outages() {
+async function outages(HOME: Home) {
   const d = (await getJson('https://www.bchydro.com/power-outages/app/outages-map-data.json')) as any[]
   return d.map((o) => ({
     municipality: o.municipality, area: o.area, customers: o.numCustomersOut, cause: o.cause,
@@ -220,9 +227,9 @@ async function tsunami() {
   }).filter((t) => Date.now() - Date.parse(t.updated) < 48 * 3600000)
 }
 
-async function homeAlerts() {
+async function homeAlerts(home: Home) {
   const settle = async <T,>(f: () => Promise<T>) => { try { return { ok: true, data: await f() } } catch (e) { return { ok: false, error: String(e), data: [] as unknown as T } } }
-  const [w, q, o, t] = await Promise.all([settle(weatherAlerts), settle(quakes), settle(outages), settle(tsunami)])
+  const [w, q, o, t] = await Promise.all([settle(() => weatherAlerts(home)), settle(() => quakes(home)), settle(() => outages(home)), settle(tsunami)])
   return { weather: w, quakes: q, outages: o, tsunami: t, fetchedAt: new Date().toISOString() }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -241,7 +248,7 @@ Deno.serve(async (req) => {
     return json({ regions: await news(), fetchedAt: new Date().toISOString() }, 200, 600)
   }
   if (kind === 'alerts') {
-    return json(await homeAlerts(), 200, 300)
+    return json(await homeAlerts(homeFrom(u)), 200, 300)
   }
   return json({ error: 'Use kind=markets, kind=news or kind=alerts' }, 400, 0)
 })

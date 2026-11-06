@@ -209,7 +209,7 @@ export function HomePage({ h, items, alerts, alertsError, onReload, lang }: {
             </ul>
           )}
           <p className="sub links">
-            <a href="https://weather.gc.ca/en/location/index.html?coords=49.135,-123.168" target="_blank" rel="noreferrer">Environment Canada</a> ·{' '}
+            <a href={`https://weather.gc.ca/en/location/index.html?coords=${(h?.home as { lat?: number })?.lat ?? 49.1666},${(h?.home as { lon?: number })?.lon ?? -123.1336}`} target="_blank" rel="noreferrer">Environment Canada</a> ·{' '}
             <a href="https://www.richmond.ca/emergency" target="_blank" rel="noreferrer">Richmond emergency</a> ·{' '}
             <a href="https://www2.gov.bc.ca/gov/content/environment/air-land-water/water/drought-flooding-dikes-dams/river-forecast-centre" target="_blank" rel="noreferrer">River Forecast Centre (Fraser River)</a> ·{' '}
             <a href="https://www.bchydro.com/power-outages/app/outage-map.html" target="_blank" rel="noreferrer">BC Hydro outages</a>

@@ -54,7 +54,7 @@ export function RecentCompare({ f, fx, show }: { f: Finance; fx: Fx; show: boole
         <h4>Largest payments in these 3 months 最大支出</h4>
         <ul className="kv">{r.largest.map(({ t, cad }) => <li key={t.id}><span>{t.posted_on} · {t.description} <span className="sub inline">{t.line}</span></span><b>{M(cad)}</b></li>)}</ul>
       </>)}
-      <p className="sub">Uses the latest 3 full months that bank statements cover; it moves forward as new statements are added. Only Felix&apos;s RBC and TD accounts are recorded so far. In 2025 the TD Visa spending was one &quot;Card spending, not itemised&quot; line, so categories in that year can look smaller. Set a budget on the Income and spending tab to compare against it here.</p>
+      <p className="sub">Uses the latest 3 full months that bank statements cover; it moves forward as new statements are added. Accounts not imported yet are missing. When a card was not itemised, its spending is one &quot;Card spending, not itemised&quot; line, so categories in that year can look smaller. Set a budget on the Income and spending tab to compare against it here.</p>
     </section>
   )
 }
@@ -107,7 +107,7 @@ export function BudgetEditor({ f, fx, show, userId, onDone }: { f: Finance; fx: 
           {msg && <span className="sub" role="status">{msg}</span>}
         </div>
       </form>
-      <p className="sub">Suggestions come from Felix&apos;s accounts only until Norina&apos;s are imported, so household budgets may need to be higher. Card spending before December 2025 was not itemised, so it shows as its own category.</p>
+      <p className="sub">Suggestions come only from the accounts imported so far, so household budgets may need to be higher. Card spending that was not itemised shows as its own category.</p>
     </section>
   )
 }
@@ -128,7 +128,7 @@ function BillForm({ init, userId, onDone, onCancel }: { init: Partial<Recurring>
     <form className="hi-edit" onSubmit={save}>
       <label>What<input required value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="Mobile plan" /></label>
       <label>Provider<input value={v.provider ?? ''} onChange={(e) => setV({ ...v, provider: e.target.value })} placeholder="Rogers" /></label>
-      <label>For (home or person)<input value={v.place ?? ''} onChange={(e) => setV({ ...v, place: e.target.value })} placeholder="Ruby, or 1934 Nassau Dr" /></label>
+      <label>For (home or person)<input value={v.place ?? ''} onChange={(e) => setV({ ...v, place: e.target.value })} placeholder="A person, or a property" /></label>
       <label>Category<select value={v.category} onChange={(e) => setV({ ...v, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
       <label>Amount each time CA$<input inputMode="decimal" value={v.amount ?? ''} onChange={(e) => setV({ ...v, amount: e.target.value === '' ? null : Number(e.target.value.replace(/[^0-9.]/g, '')) })} /></label>
       <label>How often<select value={v.frequency} onChange={(e) => setV({ ...v, frequency: e.target.value as Frequency })}>{(Object.keys(FREQ_LABEL) as Frequency[]).map((k) => <option key={k} value={k}>{FREQ_LABEL[k]}</option>)}</select></label>
@@ -228,7 +228,7 @@ export function Bills({ f, show, userId }: { f: Finance; show: boolean; userId: 
       <section className="sub-panel span-2">
         <details className="add-item"><summary>Add a bill 加入</summary><BillForm init={blank()} userId={userId} onDone={reload} /></details>
         {list.some((r) => !r.active) && <p className="sub">Stopped: {list.filter((r) => !r.active).map((r) => r.name).join(', ')}</p>}
-        <p className="sub">&quot;Last paid&quot; and &quot;Last 12 months paid&quot; come from the bank statements, found by the statement text to match (for example ROGERS). The list started from bills that repeat in Felix&apos;s statements; add anything paid from other accounts.</p>
+        <p className="sub">&quot;Last paid&quot; and &quot;Last 12 months paid&quot; come from the bank statements, found by the statement text to match (for example ROGERS). The list started from bills that repeat in the imported statements; add anything paid from other accounts.</p>
       </section>
     </div>
   )

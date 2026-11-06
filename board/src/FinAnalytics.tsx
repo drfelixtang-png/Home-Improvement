@@ -1,7 +1,7 @@
 // Analytics sections shown on each Finance tab. The sums live in finAnalytics.ts.
 import { useMemo, useState } from 'react'
 import { vanDate } from './me'
-import { holdingPrice, netWorth, savePortfolioSnapshot, toCad } from './finance'
+import { holdingPrice, netWorth, ownerName, savePortfolioSnapshot, toCad } from './finance'
 import type { Finance, Fx } from './finance'
 import * as A from './finAnalytics'
 import { shortAddress } from './finAnalytics'
@@ -90,12 +90,12 @@ export function OverviewAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: b
       </div>
       <div className="fin-bd-grid">
         <Breakdown title="By type of asset 資產類別" items={o.byClass} show={show} />
-        <Breakdown title="By owner 擁有人" items={o.byOwner} show={show} note="Felicia's money is included, as you chose; it is not yours to spend." />
+        <Breakdown title="By owner 擁有人" items={o.byOwner} show={show} note="Money you manage for others is included, as you chose; it is not yours to spend." />
         <Breakdown title="By currency 貨幣" items={o.byCurrency} show={show} note="Property and Canadian accounts are in CAD." />
         <Breakdown title="How quickly it can be used 流動性" items={o.byLiquidity} show={show} />
         <Breakdown title="Risk of money outside property 風險" items={o.riskOfMoney} show={show} risk note="Cash and GICs count as 1. Each stock has its own rating under Investments. Accounts without a holdings list are not rated." />
       </div>
-      <p className="sub">The change since August 2024 compares with the old spreadsheet, which still had the Shuswap house and a mortgage on Railway Ave, and did not include Felicia&apos;s money.</p>
+      <p className="sub">The change since August 2024 compares with the old spreadsheet, which counted different properties, a mortgage and fewer accounts.</p>
     </section>
   )
 }
@@ -131,7 +131,7 @@ export function InvestAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: boo
           </ul>
         </div>
       )}
-      <p className="sub">Accounts without a holdings list (Norina&apos;s TD accounts, your TFSA and TD Personal Investing) appear as one line each and are not rated. Send their holdings to include them by sector and risk. Dividends come from the RBC statements{i.divFrom ? `, ${i.divFrom.slice(0, 7)} to ${i.divTo.slice(0, 7)}` : ''}. Gains since purchase are not shown because purchase prices are not stored.</p>
+      <p className="sub">Accounts without a holdings list appear as one line each and are not rated. Send their holdings to include them by sector and risk. Dividends come from the imported statements{i.divFrom ? `, ${i.divFrom.slice(0, 7)} to ${i.divTo.slice(0, 7)}` : ''}. Gains since purchase are not shown because purchase prices are not stored.</p>
     </section>
   )
 }
@@ -153,7 +153,7 @@ export function AccountsAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: b
         <tbody>
           {a.insurance.map((d) => (
             <tr key={`${d.owner}${d.bank}${d.cur}`}>
-              <td>{A.OWNER_NAME[d.owner] ?? d.owner}</td>
+              <td>{ownerName(d.owner, true)}</td>
               <td>{d.bank}<span className="sub">{d.cur === 'HKD' ? 'Hong Kong Deposit Protection Scheme' : 'CDIC'}</span></td>
               <td className="n">{show ? `${d.cur === 'HKD' ? 'HK$' : 'CA$'}${Math.round(d.native).toLocaleString('en-CA')}` : '••••'}</td>
               <td className="n">{d.cur === 'HKD' ? 'HK$800,000' : 'CA$100,000'}</td>
@@ -216,7 +216,7 @@ export function CashflowAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: b
         <Breakdown title="Where income comes from 收入來源" items={c.incomeTypes} show={show} />
         <Breakdown title="Largest payees on statements 最大支出對象" items={c.payees} show={show} max={10} />
       </div>
-      <p className="sub">Monthly spending is only as complete as the records: April 2024 to June 2026 comes from Felix&apos;s RBC and TD statements (Norina&apos;s accounts are not in yet), earlier years from the old spreadsheet. Months without records do not count in the averages.</p>
+      <p className="sub">Monthly spending is only as complete as the records: recent years come from the imported bank statements (accounts not imported yet are missing), earlier years from the old spreadsheet. Months without records do not count in the averages.</p>
     </section>
   )
 }
@@ -248,7 +248,7 @@ export function PropertyAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: b
           ))}
         </tbody>
       </table></div>
-      <p className="sub">Yield is the income in the last 12 months divided by your share of the value, before tax and before costs paid by the property. Railway Ave earns no rent because Thomson lives in the lower unit. Nassau Dr income is yours, but the property is not, so it has no yield.</p>
+      <p className="sub">Yield is the income in the last 12 months divided by your share of the value, before tax and before costs paid by the property. A property that is not owned, or earns no rent, has no yield.</p>
     </section>
   )
 }
@@ -374,7 +374,7 @@ export function PortfolioSnapshots({ f, fx, show, userId, onDone }: { f: Finance
   }))
   const cols = [...dates, ...(dates.includes(today) ? [] : ['Today'])]
   const rowsOf = (d: string) => (d === 'Today' ? live : f.snapshots.filter((r) => r.as_of === d))
-  const key = (r: { owner: string; asset_type: string }) => (by === 'owner' ? A.OWNER_NAME[r.owner] ?? r.owner : TYPE_GROUP(r.asset_type))
+  const key = (r: { owner: string; asset_type: string }) => (by === 'owner' ? ownerName(r.owner, true) : TYPE_GROUP(r.asset_type))
   const groups = [...new Set(cols.flatMap((d) => rowsOf(d).map(key)))].sort()
   const table = cols.map((d) => {
     const rs = rowsOf(d)

@@ -14,7 +14,7 @@
 create table public.fin_accounts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
-  owner text not null default 'felix',
+  owner text not null default 'self',
   institution text not null,
   name text not null,
   kind text not null check (kind in ('cash', 'gic', 'investment', 'credit_card', 'loan', 'other')),

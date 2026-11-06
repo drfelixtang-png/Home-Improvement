@@ -1,7 +1,7 @@
 {
   "name": "Morning Board and Stockpile",
   "short_name": "Home",
-  "description": "Felix's Morning Board and household Stockpile Tracker",
+  "description": "Morning Board and household Stockpile Tracker",
   "start_url": "./board/",
   "scope": "./",
   "display": "standalone",

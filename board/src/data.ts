@@ -167,7 +167,7 @@ export interface BoardSettings {
   habits: Habit[]
 }
 
-/** A life area, with the hours a week Felix wants to give it. */
+/** A life area, with the hours a week the owner wants to give it. */
 export interface Area { key: string; label: string; label_zh: string; target: number }
 /** A habit and how many days a week it should happen (7 = every day). */
 export interface Habit {

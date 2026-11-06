@@ -11,6 +11,7 @@ import { FinOverview } from './FinOverview'
 import { BudgetEditor, Bills } from './FinRecent'
 import { AccountsAnalytics, AssessmentChart, PortfolioSnapshots, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
 import { RISK_LABEL } from './finAnalytics'
+import { ownerManager, ownerName } from './finance'
 import type { AccountKind, Cur, Finance, FinAccount, FinHolding, FinProperty, FinTransaction, Fx, TxKind } from './finance'
 
 type Lang = 'zh' | 'en'
@@ -30,7 +31,6 @@ const KIND: Record<AccountKind, [string, string]> = {
   cash: ['Cash', '現金'], gic: ['GIC', '定期'], investment: ['Investment', '投資'],
   credit_card: ['Credit card', '信用卡'], loan: ['Loan', '貸款'], other: ['Other', '其他'],
 }
-const OWNER: Record<string, string> = { felix: 'Felix', norina: 'Norina', joint: 'Joint', felicia: 'Felicia', norinian: 'Norinian' }
 const STATUS: Record<FinProperty['status'], string> = { held: 'Owned', sold: 'Sold', operated: 'Run, not owned', record: 'Family, record only' }
 
 function money(v: number, digits = 0): string {
@@ -134,7 +134,7 @@ function SnapshotForm({ f, fx, userId, onDone }: { f: Finance; fx: Fx; userId: s
       <div className="fin-snap-grid">
         {active.map((a) => (
           <label key={a.id}>
-            <span>{OWNER[a.owner] ?? a.owner} · {a.institution} {a.name}{a.currency !== 'CAD' ? ` (${a.currency})` : ''}</span>
+            <span>{ownerName(a.owner)} · {a.institution} {a.name}{a.currency !== 'CAD' ? ` (${a.currency})` : ''}</span>
             <input inputMode="decimal" value={vals[a.id] ?? ''} onChange={(e) => setVals({ ...vals, [a.id]: e.target.value.replace(/[^0-9.-]/g, '') })} />
           </label>
         ))}
@@ -147,7 +147,7 @@ function SnapshotForm({ f, fx, userId, onDone }: { f: Finance; fx: Fx; userId: s
 
 function IeForm({ f, userId, onDone }: { f: Finance; userId: string; onDone: () => void }) {
   const lastMonth = addMonth(vanDate().slice(0, 7), -1)
-  const [v, setV] = useState({ month: lastMonth, kind: 'income' as 'income' | 'expense', line: 'Nassau Airbnb', amount: '', currency: 'CAD' as Cur, covers: '1', note: '' })
+  const [v, setV] = useState({ month: lastMonth, kind: 'income' as 'income' | 'expense', line: f.settings.income_lines?.[0] ?? '', amount: '', currency: 'CAD' as Cur, covers: '1', note: '' })
   const [msg, setMsg] = useState<string | null>(null)
   const lines = v.kind === 'income' ? f.settings.income_lines ?? [] : f.settings.expense_lines ?? []
   const submit = async (e: FormEvent) => {
@@ -168,7 +168,7 @@ function IeForm({ f, userId, onDone }: { f: Finance; userId: string; onDone: () 
       <label>Spread over months<input type="number" min={1} max={24} value={v.covers} onChange={(e) => setV({ ...v, covers: e.target.value })} /></label>
       <label className="wide">Note<input value={v.note} onChange={(e) => setV({ ...v, note: e.target.value })} /></label>
       <div className="form-row"><button type="submit" className="btn">Add 加入</button>{msg && <span className="sub" role="status">{msg}</span>}</div>
-      <p className="sub wide">For the E 41st Ave share paid about every 6 months, type the whole payment in the month it arrived and spread it over 6 months.</p>
+      <p className="sub wide">For income paid every few months (for example a 6-monthly payout), type the whole payment in the month it arrived and spread it over the months it covers.</p>
     </form>
   )
 }
@@ -180,7 +180,7 @@ function SpendForm({ f, userId, fx, onDone }: { f: Finance; userId: string; fx: 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     try {
-      await saveFinSettings(userId, f.settings, { spending_estimate: { monthly: Number(v), currency: 'CAD', source: `Set by Felix on ${vanDate()}` } })
+      await saveFinSettings(userId, f.settings, { spending_estimate: { monthly: Number(v), currency: 'CAD', source: `Set on ${vanDate()}` } })
       setMsg('Saved.'); onDone()
     } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) }
   }
@@ -310,7 +310,7 @@ function Holdings({ f, a, fx, show, userId, onDone }: { f: Finance; a: FinAccoun
   const dayMove = hs.reduce((s, h) => { const q = f.prices[h.symbol]; return s + (q?.change ? toCad(q.change * h.shares, h.currency, fx) : 0) }, 0)
   return (
     <section className="sub-panel span-2">
-      <h3>{OWNER[a.owner] ?? a.owner} · {a.institution} {a.name} <span className="sub inline">{hs.length} stocks · {show ? money(total) : '••••'}{dayMove ? ` · today ${dayMove >= 0 ? '+' : '−'}${show ? money(Math.abs(dayMove)) : ''} (${Math.abs((dayMove / (total - dayMove || 1)) * 100).toFixed(2)}%)` : ''}</span></h3>
+      <h3>{ownerName(a.owner)} · {a.institution} {a.name} <span className="sub inline">{hs.length} stocks · {show ? money(total) : '••••'}{dayMove ? ` · today ${dayMove >= 0 ? '+' : '−'}${show ? money(Math.abs(dayMove)) : ''} (${Math.abs((dayMove / (total - dayMove || 1)) * 100).toFixed(2)}%)` : ''}</span></h3>
       <div className="tbl-wrap"><table className="tbl">
         <thead><tr><th>Stock</th><th className="n">Shares</th><th className="n">Price</th><th className="n">Value</th><th /></tr></thead>
         <tbody>{hs.map((h) => <HoldingRow key={h.id} f={f} h={h} fx={fx} show={show} userId={userId} onDone={onDone} />)}</tbody>
@@ -412,7 +412,7 @@ function Statements({ f, fx, show, onDone }: { f: Finance; fx: Fx; show: boolean
         </table></div>
       </>)}
       {view === 'capital' && (<>
-        <p className="sub">Large movements that are not everyday income or spending, such as the mortgage payout and money from the Shuswap sale. They are kept out of the monthly figures.</p>
+        <p className="sub">Large movements that are not everyday income or spending, such as a mortgage payout or the proceeds of a property sale. They are kept out of the monthly figures.</p>
         <div className="tbl-wrap"><table className="tbl">
           <thead><tr><th>Date</th><th>Description</th><th>What it is</th><th className="n">Amount</th></tr></thead>
           <tbody>{capital.map((t) => (
@@ -425,7 +425,7 @@ function Statements({ f, fx, show, onDone }: { f: Finance; fx: Fx; show: boolean
           ))}</tbody>
         </table></div>
       </>)}
-      <p className="sub">Felix&apos;s RBC and TD accounts only. Card payments and transfers between your own accounts are left out so nothing is counted twice; TD Visa payments before mid-December 2025 count as one &quot;Credit Card (Felix)&quot; line because the itemised Visa export starts in late November 2025. Airbnb payouts are shared E 41st Ave money and are not counted as income. Account and card numbers were removed.</p>
+      <p className="sub">Only the accounts imported so far. Card payments and transfers between your own accounts are left out so nothing is counted twice; when a card has no itemised export, its monthly payment counts as one card-spending line. Payouts that belong to shared properties are not counted as personal income. Account and card numbers were removed.</p>
     </section>
   )
 }
@@ -457,7 +457,7 @@ function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show
       <div className="stat"><b>{M(total)}</b><span>All investments 總投資</span></div>
       <div className="stat"><b className={move < 0 ? 'dn' : move > 0 ? 'up' : ''}>{move ? `${move > 0 ? '+' : '−'}${show ? money(Math.abs(move)) : ''} ${Math.abs((move / (stocks - move || 1)) * 100).toFixed(2)}%` : '-'}</b><span>Today, listed stocks</span></div>
       <div className="stat"><b>{rows.length}</b><span>Stocks in {stockAccounts.length} accounts</span></div>
-      {byOwner.map((x) => <div key={x.o} className="stat"><b>{M(x.v)}</b><span>{OWNER[x.o] ?? x.o}</span></div>)}
+      {byOwner.map((x) => <div key={x.o} className="stat"><b>{M(x.v)}</b><span>{ownerName(x.o)}</span></div>)}
     </div>
 
     <div className="detail-grid">
@@ -485,7 +485,7 @@ function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show
               {rows.map(({ h, a, q, cad }) => (
                 <tr key={h.id}>
                   <td><a className="q-link" href={`https://finance.yahoo.com/quote/${encodeURIComponent(h.symbol)}/`} target="_blank" rel="noreferrer">{h.name}</a> <span className="tc">{h.name_zh !== h.name ? h.name_zh : ''}</span><span className="sub">{h.symbol}{!q && ' · stored price'}</span></td>
-                  <td>{a ? `${OWNER[a.owner] ?? a.owner}` : ''}<span className="sub">{a?.institution}</span></td>
+                  <td>{a ? `${ownerName(a.owner)}` : ''}<span className="sub">{a?.institution}</span></td>
                   <td className="n">{h.shares.toLocaleString('en-CA')}</td>
                   <td className="n">{holdingPrice(f, h).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}<span className="sub">{h.currency}</span></td>
                   <td className={`n ${(q?.changePct ?? 0) < 0 ? 'dn' : (q?.changePct ?? 0) > 0 ? 'up' : ''}`}>{q?.changePct !== null && q?.changePct !== undefined ? `${q.changePct >= 0 ? '+' : '−'}${Math.abs(q.changePct).toFixed(2)}%` : '-'}</td>
@@ -496,7 +496,7 @@ function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show
               {other.map((a) => (
                 <tr key={a.id} className="muted">
                   <td>{a.institution} {a.name}<span className="sub">no holdings list yet, value from the last snapshot</span></td>
-                  <td>{OWNER[a.owner] ?? a.owner}</td>
+                  <td>{ownerName(a.owner)}</td>
                   <td className="n">-</td><td className="n">-</td><td className="n">-</td>
                   <td className="n">{M(toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx))}</td>
                   <td className="n">{pctOf(toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx), total)}%</td>
@@ -514,7 +514,7 @@ function Investments({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show
             <p className="sub">These are valued from the last snapshot. To price them live, send a screenshot of the holdings, or add each stock here.</p>
             {other.map((a) => (
               <details key={a.id} className="add-item">
-                <summary>{OWNER[a.owner] ?? a.owner} · {a.institution} {a.name} · {M(toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx))}</summary>
+                <summary>{ownerName(a.owner)} · {a.institution} {a.name} · {M(toCad(latest.get(a.id)?.amount ?? 0, a.currency, fx))}</summary>
                 <AddHolding a={a} userId={userId} onDone={onDone} />
               </details>
             ))}
@@ -598,7 +598,7 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
         ))}
       </nav>
 
-      {tab === 'overview' && <FinOverview f={f} fx={fx} show={show} />}
+      {tab === 'overview' && <FinOverview f={f} fx={fx} show={show} userId={userId} onReload={onReload} />}
 
       {tab === 'networth' && (<>
       <div className="stats wide fin-stats">
@@ -613,7 +613,7 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
           <h3>What we own 資產組成</h3>
           <ul className="kv">
             {w.properties.map(({ p, equity }) => <li key={p.id}><span>{p.address}{p.share < 1 ? ` (${Math.round(p.share * 100)}%)` : ''}</span><b>{M(equity)}</b></li>)}
-            {w.byOwner.map((o) => <li key={o.owner}><span>{OWNER[o.owner] ?? o.owner}&apos;s accounts{o.owner === 'felicia' && <span className="sub inline"> managed by Felix</span>}{o.owner === 'norinian' && <span className="sub inline"> managed by Norina</span>}</span><b>{M(o.total)}</b></li>)}
+            {w.byOwner.map((o) => <li key={o.owner}><span>{ownerName(o.owner)}&apos;s accounts{ownerManager(o.owner) && <span className="sub inline"> managed by {ownerManager(o.owner)}</span>}</span><b>{M(o.total)}</b></li>)}
             <li><span>Owing on credit cards and loans <span className="sub inline">already counted above</span></span><b>{M(w.debt)}</b></li>
             <li className="total"><span>Net worth</span><b>{M(w.total)}</b></li>
           </ul>
@@ -664,7 +664,7 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
               const total = list.reduce((s, a) => s + toCad(amountOf(a) ?? 0, a.currency, fx), 0)
               return (
                 <div key={o} className="tbl-wrap">
-                  <h4>{OWNER[o] ?? o} · {M(total)}</h4>
+                  <h4>{ownerName(o)} · {M(total)}</h4>
                   <table className="tbl">
                     <thead><tr><th>Account</th><th>Type</th><th className="n">Balance</th></tr></thead>
                     <tbody>
@@ -713,7 +713,7 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
             </tbody>
           </table></div>
           <p className="sub">
-            Shared income from E 41st Ave is spread over the 6 months it covers. From April 2024 to June 2026, spending and income come from Felix&apos;s RBC and TD statements (Norina&apos;s accounts are not in yet); other months show your estimate until you add real spending.
+            Income paid every few months is spread over the months it covers. Months with imported bank statements use recorded spending (accounts not imported yet are missing); other months show your estimate until you add real spending.
             {zh ? ' 每半年的分紅會平均攤分到六個月。' : ''}
           </p>
           <details className="add-item"><summary>Add income or spending 加入收支</summary><IeForm f={f} userId={userId} onDone={onReload} /></details>

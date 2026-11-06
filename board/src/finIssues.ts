@@ -1,6 +1,6 @@
 // Finance overview: the issues, decisions and things to watch, worked out from the data on each tab.
 // Each rule returns at most one issue; a stable key lets the owner mark it done or hide it for a while.
-import { mix, netWorth, toCad } from './finance'
+import { mix, netWorth, ownerManager, ownerName, toCad } from './finance'
 import type { Finance, Fx } from './finance'
 import * as A from './finAnalytics'
 
@@ -44,12 +44,23 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
     })
   }
 
+  // ---------------------------------------------------------------- backup
+  const lastBackup = (f.settings as { last_backup?: string }).last_backup
+  if (!lastBackup || days(lastBackup, today) > 31) {
+    issues.push({
+      key: `fin:backup:${today.slice(0, 7)}`, level: 'act', area: 'Records', tab: 'overview',
+      title: lastBackup ? `Last backup was ${days(lastBackup, today)} days ago` : 'No backup downloaded yet',
+      detail: () => 'The database plan keeps no backups, so a downloaded file is the only copy of your data outside the database.',
+      action: 'Press "Download backup" at the bottom of the Overview and keep the file somewhere private.',
+    })
+  }
+
   // ---------------------------------------------------------------- accounts
   for (const d of acc.insurance.filter((x) => x.over > 0)) {
     const sym = d.cur === 'HKD' ? 'HK$' : 'CA$'
     issues.push({
       key: `fin:insurance:${d.owner}:${d.bank}`, level: 'decide', area: 'Accounts', tab: 'accounts',
-      title: `${A.OWNER_NAME[d.owner] ?? d.owner}: deposits at ${d.bank} are above the insurance limit`,
+      title: `${ownerName(d.owner, true)}: deposits at ${d.bank} are above the insurance limit`,
       detail: (mm) => `About ${d.cur === 'HKD' ? `${sym}${Math.round(d.over).toLocaleString('en-CA')} (${mm(d.over / fx.cadHkd)})` : mm(d.over)} is above the ${d.cur === 'HKD' ? 'HK$800,000 Deposit Protection Scheme' : 'CA$100,000 CDIC'} limit.`,
       action: d.cur === 'HKD'
         ? 'Move the amount above HK$800,000 to another bank, or accept the risk.'
@@ -86,8 +97,8 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
     issues.push({
       key: 'fin:spend-estimate', level: 'act', area: 'Income and spending', tab: 'cashflow',
       title: 'The monthly spending estimate is still the August 2024 budget',
-      detail: (mm) => `The estimate is ${mm(spend)} a month.${cf.recordedMonths ? ` Felix's statements alone show about ${mm(cf.avgSpend)} a month over ${cf.recordedMonths} recorded months; Norina's spending is not in yet.` : ''}`,
-      action: 'Once Norina\'s accounts are imported, set the monthly spending on the Net worth tab to the recorded average.',
+      detail: (mm) => `The estimate is ${mm(spend)} a month.${cf.recordedMonths ? ` The imported statements alone show about ${mm(cf.avgSpend)} a month over ${cf.recordedMonths} recorded months; accounts not imported yet would add to it.` : ''}`,
+      action: 'Once all household accounts are imported, set the monthly spending on the Net worth tab to the recorded average.',
     })
   }
   const review = f.transactions.filter((t) => !t.reviewed).length
@@ -107,12 +118,18 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
       action: 'Export the RBC, TD and TD Visa activity since then into the "Temp Bank Statement Input" folder in Google Drive.',
     })
   }
-  if (f.transactions.length && !f.transactions.some((t) => /BMO/i.test(t.account))) {
+  // Household bank and card accounts (not money managed for others) at banks with no imported statements.
+  const imported = new Set(f.transactions.map((t) => t.account.split(' ')[0].toUpperCase()))
+  const missingBanks = [...new Set(f.accounts
+    .filter((a) => a.active && (a.kind === 'cash' || a.kind === 'credit_card') && a.currency === 'CAD' && !ownerManager(a.owner))
+    .map((a) => a.institution.split(' ')[0])
+    .filter((b) => !imported.has(b.toUpperCase())))]
+  if (f.transactions.length && missingBanks.length) {
     issues.push({
-      key: 'fin:statements:norina', level: 'act', area: 'Income and spending', tab: 'cashflow',
-      title: 'Norina\'s and the BMO accounts are not in the bank statements',
-      detail: () => 'Household spending is only partly recorded, so savings rate and spending figures are too low.',
-      action: 'Export Norina\'s BMO and TD activity and your BMO activity into the Google Drive folder.',
+      key: `fin:statements:missing:${missingBanks.join(',')}`, level: 'act', area: 'Income and spending', tab: 'cashflow',
+      title: `Accounts at ${missingBanks.join(', ')} are not in the bank statements`,
+      detail: () => 'Household spending is only partly recorded, so savings rate and spending figures are too low. Other people\'s accounts at banks already imported may be missing too.',
+      action: 'Export the activity of every household account into the Google Drive folder.',
     })
   }
   if (cf.income > 0 && spend > 0) {
@@ -127,13 +144,17 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
       })
     }
   }
-  const e41 = f.ie.filter((r) => r.line === 'E 41st Ave distribution').sort((a, b) => a.month.localeCompare(b.month))
-  const zero = e41.slice(-3).find((r) => r.amount === 0)
-  if (zero) {
+  // A property income line whose recent payouts include a zero.
+  for (const p of f.properties) {
+    const line = typeof p.details?.income_line === 'string' ? p.details.income_line : null
+    if (!line) continue
+    const rows = f.ie.filter((r) => r.line === line).sort((a, b) => a.month.localeCompare(b.month))
+    const zero = rows.slice(-3).find((r) => r.amount === 0)
+    if (!zero) continue
     issues.push({
-      key: `fin:e41-zero:${zero.month}`, level: 'watch', area: 'Property', tab: 'property',
-      title: `No E 41st Ave payout in ${monthName(zero.month)}`, detail: () => 'The money went to renovation, so the 6-monthly income was skipped.',
-      action: 'Ask the co-owners for the renovation cost and when payouts return to normal.',
+      key: `fin:payout-zero:${p.key}:${zero.month}`, level: 'watch', area: 'Property', tab: 'property',
+      title: `No payout from ${A.shortAddress(p.address)} in ${monthName(zero.month)}`, detail: () => 'A regular payout was skipped, so property income is lower this year.',
+      action: 'Ask the co-owners why it was skipped and when payouts return to normal.',
     })
   }
 
@@ -143,7 +164,7 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
     issues.push({
       key: `fin:no-holdings:${other.length}`, level: 'act', area: 'Investments', tab: 'investments',
       title: `${other.length} investment accounts have no holdings list`,
-      detail: () => `${pct(1 - inv.ratedShare)} of investments cannot be checked for sector, risk or concentration: ${other.map((a) => `${A.OWNER_NAME[a.owner] ?? a.owner}'s ${a.institution} ${a.name}`).join(', ')}.`,
+      detail: () => `${pct(1 - inv.ratedShare)} of investments cannot be checked for sector, risk or concentration: ${other.map((a) => `${ownerName(a.owner)}'s ${a.institution} ${a.name}`).join(', ')}.`,
       action: 'Send screenshots of their holdings, or add each stock under Investments, "By account, to edit".',
     })
   }
@@ -159,7 +180,7 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
     issues.push({
       key: 'fin:high-risk', level: 'decide', area: 'Investments', tab: 'investments',
       title: `${pct(high)} of investments are rated high or very high risk`, detail: () => 'Mostly single Hong Kong and China stocks, crypto and newly listed shares.',
-      action: 'Decide whether this level of risk suits retirement, for your money and for Felicia\'s.',
+      action: 'Decide whether this level of risk suits retirement, for your own money and for money you manage for others.',
     })
   }
   // Holdings that have lost most of their value since the first snapshot.
@@ -203,7 +224,7 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
     const v = aave.reduce((s, h) => s + toCad(h.shares * (f.prices[h.symbol]?.price ?? h.last_price ?? 1), h.currency, fx), 0)
     issues.push({
       key: 'fin:aave', level: 'watch', area: 'Investments', tab: 'investments',
-      title: 'Tether lent on Aave carries platform and stablecoin risk', detail: (mm) => `About ${mm(v)} of Felicia's money is supplied on Aave v3; it is not insured.`,
+      title: 'Tether lent on Aave carries platform and stablecoin risk', detail: (mm) => `About ${mm(v)} is supplied on Aave v3 (${[...new Set(aave.map((h) => ownerName(f.accounts.find((a) => a.id === h.account_id)?.owner ?? '')))].join(', ')}); it is not insured.`,
       action: 'Check the balances every few months and update them under "By account, to edit".',
     })
   }

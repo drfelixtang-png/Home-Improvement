@@ -1,8 +1,8 @@
 -- Morning Board, round 2.
--- board_item_state: items Felix marks done or snoozes on the board. The morning task
+-- board_item_state: items the owner marks done or snoozes on the board. The morning task
 --   reads this too, so done items are not repeated the next day.
 -- board_extra: blocks written by other tasks, one row per kind (for example 'whatsapp',
---   written by the Claude desktop task on Felix's Windows computer).
+--   written by the Claude desktop task on the owner's Windows computer).
 
 create table public.board_item_state (
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,

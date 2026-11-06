@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 
-// Done and snooze: items Felix marks on the board disappear until they are relevant again.
+// Done and snooze: items the owner marks on the board disappear until they are relevant again.
 // "Done" hides an item for good; "Snooze" hides it until tomorrow (Vancouver date).
 
 const VAN = 'America/Vancouver'
