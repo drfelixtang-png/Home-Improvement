@@ -3,6 +3,7 @@
 import { mix, netWorth, ownerManager, ownerName, toCad } from './finance'
 import type { Finance, Fx } from './finance'
 import * as A from './finAnalytics'
+import { yieldCheck } from './finYield'
 
 export type Level = 'act' | 'decide' | 'watch'
 export interface Issue {
@@ -52,6 +53,26 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
       title: lastBackup ? `Last backup was ${days(lastBackup, today)} days ago` : 'No backup downloaded yet',
       detail: () => 'The database plan keeps no backups, so a downloaded file is the only copy of your data outside the database.',
       action: 'Press "Download backup" at the bottom of the Overview and keep the file somewhere private.',
+    })
+  }
+
+  // ---------------------------------------------------------------- cash yield
+  const yc = yieldCheck(f, fx)
+  if (yc.bench && yc.extraCad >= 300) {
+    const top = yc.rows.filter((r) => r.extraYearCad > 50).slice(0, 3)
+    issues.push({
+      key: `fin:yield:${Math.round(yc.extraCad / 250)}`, level: 'decide', area: 'Accounts', tab: 'accounts',
+      title: 'Cash is earning less than it could',
+      detail: (mm) => `At good current rates, savings and GICs could earn about ${mm(yc.extraCad)} more a year. Largest gaps: ${top.map((r) => `${ownerName(r.a.owner)} ${r.a.institution} ${r.a.name} (${r.rate?.toFixed(2)}% now, ${mm(r.extraYearCad)} a year)`).join('; ')}.${yc.unknown ? ` ${yc.unknown} accounts have no known rate yet.` : ''}`,
+      action: 'Open the Cash yield check on the Accounts tab. Move money you do not need for bills into a no-fee high-interest savings account or a GIC, keeping each person under the CA$100,000 CDIC limit at each institution.',
+    })
+  }
+  if (yc.bench && days(yc.bench.as_of, today) > 120) {
+    issues.push({
+      key: `fin:yield-rates:${today.slice(0, 7)}`, level: 'watch', area: 'Accounts', tab: 'accounts',
+      title: `Comparison interest rates are ${days(yc.bench.as_of, today)} days old`,
+      detail: () => 'The cash yield check compares your accounts with rates checked on ' + yc.bench!.as_of + '.',
+      action: 'Ask Claude to check current savings, GIC and Hong Kong time deposit rates.',
     })
   }
 
