@@ -483,3 +483,15 @@ a.q-link span { font-size: 0.8em; color: var(--muted); }
 
 .fin-chart .bar-seg { stroke: var(--panel-2); stroke-width: 1; }
 .fin-chart .bar-seg.c0 { fill: #f0b44c; } .fin-chart .bar-seg.c1 { fill: #8fb8de; } .fin-chart .bar-seg.c2 { fill: #5fcf8f; } .fin-chart .bar-seg.c3 { fill: #e07a6b; }
+/* Finance overview: issues */
+.fin-issues { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 10px; }
+.fin-issue { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--muted); padding: 10px 12px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.fin-issue.act { border-left-color: var(--crit); } .fin-issue.decide { border-left-color: var(--warn); } .fin-issue.watch { border-left-color: #8fb8de; }
+.fin-issue.is-hidden { opacity: 0.6; }
+.fin-issue-head { display: flex; gap: 8px; align-items: center; }
+.fin-issue-title { font-size: 0.95rem; }
+.fin-issue p { margin: 0; }
+.fin-issue-action { font-size: 0.88rem; }
+.fin-issue-action .lbl { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-right: 4px; }
+.fin-issue-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.pill.lvl-act { background: var(--crit-bg); color: var(--crit); } .pill.lvl-decide { background: var(--warn-bg); color: var(--warn); } .pill.lvl-watch { background: #1d2f45; color: #8fb8de; }

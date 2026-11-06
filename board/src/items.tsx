@@ -25,8 +25,8 @@ export function ItemStateProvider({ children }: { children: ReactNode }) {
     return !!s.until && s.until > todayVan()
   }, [states])
 
-  const mark = useCallback((key: string, title: string, status: 'done' | 'snoozed') => {
-    const row: ItemState = { item_key: key, status, until: status === 'snoozed' ? tomorrowVan() : null, title }
+  const mark = useCallback((key: string, title: string, status: 'done' | 'snoozed', until?: string) => {
+    const row: ItemState = { item_key: key, status, until: status === 'snoozed' ? until ?? tomorrowVan() : null, title }
     setStates((s) => ({ ...s, [key]: row }))
     setLastAction({ key, title, status })
     setItemState(row).catch((e) => setError((e as Error).message))

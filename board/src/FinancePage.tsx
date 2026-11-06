@@ -7,6 +7,7 @@ import {
   saveBalances, saveFinSettings, saveHolding,
   sumMap, toCad, updateProperty, yearLines,
 } from './finance'
+import { FinOverview } from './FinOverview'
 import { AccountsAnalytics, AssessmentChart, PortfolioSnapshots, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
 import { RISK_LABEL } from './finAnalytics'
 import type { AccountKind, Cur, Finance, FinAccount, FinHolding, FinProperty, FinTransaction, Fx, TxKind } from './finance'
@@ -16,6 +17,7 @@ type Lang = 'zh' | 'en'
 const SHOW_KEY = 'morning-board-finance-show'
 const FIN_TABS = [
   { key: 'overview', label: 'Overview', zh: '總覽' },
+  { key: 'networth', label: 'Net worth', zh: '淨資產' },
   { key: 'investments', label: 'Investments', zh: '投資' },
   { key: 'accounts', label: 'Accounts', zh: '戶口' },
   { key: 'cashflow', label: 'Income and spending', zh: '收支' },
@@ -594,7 +596,9 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
         ))}
       </nav>
 
-      {tab === 'overview' && (<>
+      {tab === 'overview' && <FinOverview f={f} fx={fx} show={show} />}
+
+      {tab === 'networth' && (<>
       <div className="stats wide fin-stats">
         <div className="stat"><b>{M(w.total)}</b><span>Net worth 淨資產</span></div>
         <div className="stat"><b>{M(w.accounts)}</b><span>Bank and investment accounts</span></div>
