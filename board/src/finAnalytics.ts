@@ -14,7 +14,7 @@ const slices = (m: Map<string, number>, sort = true): Slice[] => {
 export const total = (xs: Slice[]) => xs.reduce((s, x) => s + x.value, 0)
 export const isCrypto = (h: FinHolding) => h.asset_type === 'crypto' || h.asset_type === 'stablecoin'
 export const shortAddress = (a: string) => a.split(',')[0]
-export const OWNER_NAME: Record<string, string> = { felix: 'Felix', norina: 'Norina', felicia: 'Felicia (managed)', joint: 'Joint' }
+export const OWNER_NAME: Record<string, string> = { felix: 'Felix', norina: 'Norina', felicia: 'Felicia (managed)', norinian: 'Norinian (managed by Norina)', joint: 'Joint' }
 
 // Every piece of the net worth, in CAD, with the facts the breakdowns need.
 interface Piece {
@@ -134,7 +134,7 @@ export function investments(f: Finance, fx: Fx) {
 // ------------------------------------------------------------------ accounts
 const bankGroup = (inst: string) => (inst.startsWith('Bank of China') ? 'Bank of China' : inst.startsWith('Bright Smart') ? 'Bright Smart' : inst.split(' ')[0])
 const CA_BANKS = ['RBC', 'TD', 'BMO', 'CIBC', 'Scotiabank', 'HSBC Canada', 'EQ']
-const HK_BANKS = ['Bank of China', 'HSBC']
+const HK_BANKS = ['Bank of China', 'HSBC', 'Citibank']
 
 export function accounts(f: Finance, fx: Fx) {
   const ps = pieces(f, fx).filter((p) => p.account)
