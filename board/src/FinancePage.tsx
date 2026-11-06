@@ -8,6 +8,7 @@ import {
   sumMap, toCad, updateProperty, yearLines,
 } from './finance'
 import { FinOverview } from './FinOverview'
+import { BudgetEditor, Bills } from './FinRecent'
 import { AccountsAnalytics, AssessmentChart, PortfolioSnapshots, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
 import { RISK_LABEL } from './finAnalytics'
 import type { AccountKind, Cur, Finance, FinAccount, FinHolding, FinProperty, FinTransaction, Fx, TxKind } from './finance'
@@ -21,6 +22,7 @@ const FIN_TABS = [
   { key: 'investments', label: 'Investments', zh: '投資' },
   { key: 'accounts', label: 'Accounts', zh: '戶口' },
   { key: 'cashflow', label: 'Income and spending', zh: '收支' },
+  { key: 'bills', label: 'Bills', zh: '固定支出' },
   { key: 'property', label: 'Property', zh: '物業' },
   { key: 'history', label: 'History', zh: '歷史' },
 ]
@@ -719,6 +721,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
 
         <CashflowAnalytics f={f} fx={fx} show={show} />
 
+        <BudgetEditor f={f} fx={fx} show={show} userId={userId} onDone={onReload} />
+
         <Statements f={f} fx={fx} show={show} onDone={onReload} />
 
         <section className="sub-panel span-2">
@@ -747,6 +751,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
         </section>
       </div>
       )}
+
+      {tab === 'bills' && <Bills f={f} show={show} userId={userId} />}
 
       {tab === 'property' && (
       <div className="detail-grid">

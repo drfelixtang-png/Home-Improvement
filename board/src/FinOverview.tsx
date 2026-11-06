@@ -1,11 +1,11 @@
 // Finance overview: what needs action, a decision, or watching. Issues come from finIssues.ts.
 import { useMemo, useState } from 'react'
 import { vanDate } from './me'
-import { netWorth, toCad } from './finance'
 import type { Finance, Fx } from './finance'
 import { findIssues } from './finIssues'
 import type { Issue, Level } from './finIssues'
 import { useItems } from './itemHooks'
+import { RecentCompare } from './FinRecent'
 
 const LEVEL: Record<Level, { label: string; zh: string; note: string }> = {
   act: { label: 'Act now', zh: '需要處理', note: 'Something to do, usually quick.' },
@@ -51,10 +51,6 @@ export function FinOverview({ f, fx, show }: { f: Finance; fx: Fx; show: boolean
   const { issues, good } = useMemo(() => findIssues(f, fx, today), [f, fx, today])
   const open = issues.filter((i) => !isHidden(i.key))
   const hidden = issues.filter((i) => isHidden(i.key))
-  const w = netWorth(f, fx)
-  const est = f.settings.spending_estimate
-  const spend = est ? toCad(est.monthly, est.currency, fx) : 0
-  const safe = w.byKind.cash + w.byKind.credit_card + w.byKind.gic
   const M = (v: number) => (show ? money(v) : '••••')
   const count = (l: Level) => open.filter((i) => i.level === l).length
   return (<>
@@ -62,11 +58,11 @@ export function FinOverview({ f, fx, show }: { f: Finance; fx: Fx; show: boolean
       {(['act', 'decide', 'watch'] as Level[]).map((l) => (
         <div key={l} className="stat"><b className={l === 'act' && count(l) ? 'crit' : l === 'decide' && count(l) ? 'warn' : ''}>{count(l)}</b><span>{LEVEL[l].label} {LEVEL[l].zh}</span></div>
       ))}
-      <div className="stat"><b>{M(w.total)}</b><span>Net worth</span></div>
-      <div className="stat"><b>{spend ? `${Math.round(safe / spend)} months` : '-'}</b><span>Spending covered by cash and GICs</span></div>
     </div>
 
     <div className="detail-grid">
+      <RecentCompare f={f} fx={fx} show={show} />
+
       {(['act', 'decide', 'watch'] as Level[]).map((l) => {
         const list = open.filter((i) => i.level === l)
         return (
