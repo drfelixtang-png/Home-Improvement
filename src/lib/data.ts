@@ -117,6 +117,20 @@ export async function adjustStock(itemBatches: Batch[], delta: number): Promise<
   return true
 }
 
+// Stock-take: make the item's total equal the counted number.
+// More than recorded: the extra goes into a new batch (with the expiry date given, if any),
+// or onto the newest batch when no date is given. Less: taken from the batch expiring soonest.
+export async function setCount(itemId: string, itemBatches: Batch[], counted: number, expiry: string | null) {
+  const onHand = round(itemBatches.reduce((sum, b) => sum + Number(b.qty), 0))
+  const diff = round(counted - onHand)
+  if (diff > 0) {
+    if (expiry || !itemBatches.length) await addBatch({ item_id: itemId, qty: diff, expiry_date: expiry, purchased_on: null })
+    else await adjustStock(itemBatches, diff)
+  } else if (diff < 0) {
+    await adjustStock(itemBatches, diff)
+  }
+}
+
 // ---------- prices and products ----------
 
 export async function addPrice(p: { item_id: string; store: string; price: number; qty: number; bought_on: string; note?: string | null }) {

@@ -217,7 +217,17 @@ export function AddBatchForm({ item, onDone, defaultQty }: { item: Item; onDone?
   )
 }
 
-export function BatchList({ item, batches, showUsed = true }: { item: Item; batches: Batch[]; showUsed?: boolean }) {
+export function BatchList({
+  item,
+  batches,
+  showUsed = true,
+  showAdd = true,
+}: {
+  item: Item
+  batches: Batch[]
+  showUsed?: boolean
+  showAdd?: boolean
+}) {
   const { t } = useStore()
   return (
     <div className="batches">
@@ -225,7 +235,7 @@ export function BatchList({ item, batches, showUsed = true }: { item: Item; batc
       {batches.map((b) => (
         <BatchRow key={b.id} batch={b} unit={item.unit} showUsed={showUsed} />
       ))}
-      <AddBatchForm item={item} />
+      {showAdd && <AddBatchForm item={item} />}
     </div>
   )
 }

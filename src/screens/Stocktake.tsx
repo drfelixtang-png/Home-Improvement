@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../lib/store'
 import { go } from '../lib/router'
 import { itemHighlight, itemName, word } from '../lib/i18n'
 import { formatQty } from '../lib/dates'
-import { covers, locationRank, summarise } from '../lib/status'
+import { covers, locationRank, round, summarise } from '../lib/status'
 import type { ItemSummary } from '../lib/status'
-import { cancelStocktake, deleteBatch, finishStocktake, loadAll, loadLines, saveLine, startStocktake } from '../lib/data'
+import { cancelStocktake, deleteBatch, finishStocktake, loadAll, loadLines, saveLine, setCount, startStocktake } from '../lib/data'
 import { BatchList } from '../components/BatchList'
 import { StatusDot } from '../components/StatusDot'
 import { areaText, stocktakeLabel } from '../lib/areas'
@@ -32,6 +32,86 @@ function lineFor(stocktakeId: string, s: ItemSummary) {
   }
 }
 
+// The number counted on the shelf. Always saved when Confirm is tapped, even for an item
+// with no stock recorded yet. Reports unsaved typing so the screen can warn before leaving.
+function CountBox({
+  s,
+  done,
+  onConfirm,
+  onDirty,
+}: {
+  s: ItemSummary
+  done: boolean
+  onConfirm: (counted: number, expiry: string | null) => void
+  onDirty: (dirty: boolean) => void
+}) {
+  const { t, lang } = useStore()
+  const start = s.onHand > 0 || done ? formatQty(s.onHand) : ''
+  const [value, setValue] = useState(start)
+  const [expiry, setExpiry] = useState('')
+  const [seen, setSeen] = useState(s.onHand)
+  const step = Number(s.item.step_qty) || 1
+  const unit = word(lang, s.item.unit)
+
+  // Follow changes made in the batch list until the user types here.
+  if (seen !== s.onHand) {
+    setSeen(s.onHand)
+    if (value === start || value === '') setValue(formatQty(s.onHand))
+  }
+  const n = value.trim() === '' ? null : Number(value)
+  const valid = n !== null && Number.isFinite(n) && n >= 0
+  const dirty = valid && round(n!) !== s.onHand
+  useEffect(() => {
+    onDirty(dirty || (!done && value.trim() !== '' && !valid))
+  }, [dirty, done, value, valid, onDirty])
+
+  const bump = (d: number) => setValue(formatQty(round(Math.max(0, (valid ? n! : s.onHand) + d))))
+
+  return (
+    <div className="count-box">
+      <label className="count-field">
+        <span>{t('countedLabel', { unit })}</span>
+        <span className="stepper">
+          <button type="button" className="step-btn" aria-label={t('minusStep', { n: `${formatQty(step)} ${unit}` })} onClick={() => bump(-step)}>
+            −
+          </button>
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="any"
+            placeholder="0"
+            value={value}
+            aria-invalid={value.trim() !== '' && !valid}
+            onChange={(e) => setValue(e.target.value)}
+          />
+          <button type="button" className="step-btn" aria-label={t('plusStep', { n: `${formatQty(step)} ${unit}` })} onClick={() => bump(step)}>
+            +
+          </button>
+        </span>
+      </label>
+      {valid && n! > s.onHand && (
+        <label className="count-expiry">
+          <span>
+            {t('newStockExpiry')} <small className="muted">({t('optional')})</small>
+          </span>
+          <input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+        </label>
+      )}
+      <div className="row">
+        <button
+          className="primary"
+          disabled={value.trim() !== '' && !valid}
+          onClick={() => onConfirm(valid ? round(n!) : 0, expiry || null)}
+        >
+          ✓ {t('confirmItem')}
+        </button>
+        {dirty && <span className="unsaved">{t('notSavedYet')}</span>}
+      </div>
+    </div>
+  )
+}
+
 // area: a location named in the link (for example from the Morning Board), offered first.
 export function StocktakeScreen({ area }: { area?: string }) {
   const { t, lang, summaries, settings, openStocktake, areas, run, reload } = useStore()
@@ -41,6 +121,13 @@ export function StocktakeScreen({ area }: { area?: string }) {
   const [index, setIndex] = useState<number | null>(null)
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
+  // Items with a typed count that has not been confirmed yet.
+  const dirty = useRef<Set<string>>(new Set())
+  const markDirty = useCallback((id: string, d: boolean) => {
+    if (d) dirty.current.add(id)
+    else dirty.current.delete(id)
+  }, [])
+  const leaveCard = (id: string | undefined) => !id || !dirty.current.has(id) || window.confirm(t('unsavedCount'))
 
   const setMode = (m: 'one' | 'list') => {
     setModeState(m)
@@ -120,9 +207,16 @@ export function StocktakeScreen({ area }: { area?: string }) {
   const doneCount = ordered.filter((s) => confirmed.has(s.item.id)).length
   const total = ordered.length
 
-  const confirm = async (s: ItemSummary, advance: boolean) => {
-    const ok = await run(() => saveLine(lineFor(openStocktake.id, s)))
+  const confirm = async (s: ItemSummary, advance: boolean, counted: number, expiry: string | null) => {
+    const ok = await run(async () => {
+      await setCount(s.item.id, s.batches, counted, expiry)
+      // Record the line from what is now saved, so the snapshot always matches the stock.
+      const fresh = await loadAll()
+      const item = fresh.items.find((i) => i.id === s.item.id)
+      if (item) await saveLine(lineFor(openStocktake.id, summarise(item, fresh.batches, settings)))
+    })
     if (!ok) return
+    dirty.current.delete(s.item.id)
     const next = new Set(confirmed).add(s.item.id)
     setConfirmed(next)
     if (advance) {
@@ -137,6 +231,7 @@ export function StocktakeScreen({ area }: { area?: string }) {
     run(() => Promise.all(s.batches.filter((b) => Number(b.qty) <= 0).map((b) => deleteBatch(b.id))))
 
   const finish = async () => {
+    if (dirty.current.size && !window.confirm(t('unsavedCount'))) return
     const left = total - doneCount
     if (left > 0 && !window.confirm(t('finishConfirm', { n: left }))) return
     setBusy(true)
@@ -144,9 +239,11 @@ export function StocktakeScreen({ area }: { area?: string }) {
       // Wait for any batch edit still saving, then snapshot every active item from fresh data.
       await reload()
       const ok = await run(async () => {
-        const fresh = await loadAll()
+        // Confirmed lines are kept exactly as saved; only items never confirmed are added now.
+        const [fresh, saved] = await Promise.all([loadAll(), loadLines(openStocktake.id)])
+        const have = new Set(saved.map((l) => l.item_id))
         const lines = fresh.items
-          .filter((i) => !i.archived && covers(openStocktake, i.location))
+          .filter((i) => !i.archived && covers(openStocktake, i.location) && !have.has(i.id))
           .map((i) => lineFor(openStocktake.id, summarise(i, fresh.batches, settings)))
         await finishStocktake(openStocktake.id, lines, notes)
       })
@@ -178,13 +275,18 @@ export function StocktakeScreen({ area }: { area?: string }) {
         </p>
         <p className="item-highlight">{itemHighlight(lang, s.item)}
         </p>
-        <BatchList item={s.item} batches={s.batches} showUsed={false} />
-        <div className="row">
-          <button className="primary" onClick={() => confirm(s, mode === 'one')}>
-            ✓ {t('confirmItem')}
-          </button>
+        <CountBox
+          key={`${s.item.id}-${done}`}
+          s={s}
+          done={done}
+          onDirty={(d) => markDirty(s.item.id, d)}
+          onConfirm={(counted, expiry) => confirm(s, mode === 'one', counted, expiry)}
+        />
+        <details className="batch-details" open={s.batches.length > 1 || undefined}>
+          <summary>{t('batchesDetails', { n: s.batches.length })}</summary>
+          <BatchList item={s.item} batches={s.batches} showUsed={false} showAdd={false} />
           {hasEmpty && <button onClick={() => removeEmpty(s)}>{t('removeEmpty')}</button>}
-        </div>
+        </details>
       </article>
     )
   }
@@ -215,13 +317,13 @@ export function StocktakeScreen({ area }: { area?: string }) {
           <h2 className="loc-heading">{word(lang, current.item.location)}</h2>
           {card(current)}
           <div className="row space-between">
-            <button disabled={index <= 0} onClick={() => setIndex(index - 1)}>
+            <button disabled={index <= 0} onClick={() => leaveCard(current?.item.id) && setIndex(index - 1)}>
               ← {t('previous')}
             </button>
             <span className="muted">
               {Math.min(index, ordered.length - 1) + 1} / {total}
             </span>
-            <button disabled={index >= total - 1} onClick={() => setIndex(index + 1)}>
+            <button disabled={index >= total - 1} onClick={() => leaveCard(current?.item.id) && setIndex(index + 1)}>
               {t('next')} →
             </button>
           </div>

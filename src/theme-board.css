@@ -671,3 +671,45 @@ textarea {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+/* ---------- stock-take count box ---------- */
+.count-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--brand);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  margin: 8px 0;
+}
+.count-field .stepper input {
+  width: 7em;
+  text-align: center;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.count-field .stepper input[aria-invalid='true'] {
+  border-color: var(--red);
+}
+.count-expiry input {
+  max-width: 14em;
+}
+.unsaved {
+  color: var(--yellow);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.batch-details {
+  margin-top: 4px;
+}
+.batch-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 4px 0;
+}
+.batch-details[open] summary {
+  color: var(--text);
+}
