@@ -214,6 +214,17 @@ export function Bills({ f, show, userId }: { f: Finance; show: boolean; userId: 
         </ul>
       </section>
 
+      {(() => {
+        const qs = (f.settings as { open_questions?: { key: string; text: string }[] }).open_questions ?? []
+        return qs.length ? (
+          <section className="sub-panel span-2">
+            <h3>Open questions 待確認 <span className="sub inline">{qs.length} to answer</span></h3>
+            <ol className="fin-questions">{qs.map((q) => <li key={q.key}>{q.text}</li>)}</ol>
+            <p className="sub">Answer them by editing the bills above, or tell Claude and the list will be updated.</p>
+          </section>
+        ) : null
+      })()}
+
       <section className="sub-panel span-2">
         <details className="add-item"><summary>Add a bill 加入</summary><BillForm init={blank()} userId={userId} onDone={reload} /></details>
         {list.some((r) => !r.active) && <p className="sub">Stopped: {list.filter((r) => !r.active).map((r) => r.name).join(', ')}</p>}

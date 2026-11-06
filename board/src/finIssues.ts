@@ -32,6 +32,18 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
   const acc = A.accounts(f, fx)
   const cf = A.cashflow(f, fx, 'last12', today)
 
+  // ---------------------------------------------------------------- dated reminders saved in the settings
+  type Reminder = { key: string; level: Level; due?: string; tab: string; area: string; title: string; detail: string; action: string }
+  for (const r of ((f.settings as { reminders?: Reminder[] }).reminders ?? [])) {
+    const left = r.due ? days(today, r.due) : null
+    if (left !== null && left < -30) continue
+    issues.push({
+      key: `fin:${r.key}`, level: left !== null && left <= 14 ? 'act' : r.level, area: r.area, tab: r.tab,
+      title: r.due ? `${r.title} (by ${new Date(`${r.due}T12:00:00`).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}${left !== null ? left < 0 ? ', overdue' : `, ${left} days` : ''})` : r.title,
+      detail: () => r.detail, action: r.action,
+    })
+  }
+
   // ---------------------------------------------------------------- accounts
   for (const d of acc.insurance.filter((x) => x.over > 0)) {
     const sym = d.cur === 'HKD' ? 'HK$' : 'CA$'
