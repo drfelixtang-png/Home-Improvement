@@ -49,7 +49,7 @@ export interface FinSettings {
 }
 
 // Display names for account owners, loaded from the private settings (never written in the code).
-export interface OwnerInfo { name: string; managed_by?: string }
+export interface OwnerInfo { name: string; managed_by?: string; business?: boolean }
 const owners: Record<string, OwnerInfo> = {}
 const titleCase = (k: string) => (k ? k[0].toUpperCase() + k.slice(1) : '')
 export const ownerName = (key: string, withManager = false): string => {
@@ -65,6 +65,8 @@ export interface Finance {
   holdings: FinHolding[]; prices: Record<string, Quote>
   transactions: FinTransaction[]
   snapshots: FinSnapshotRow[]
+  // Business owners (for example a company) are kept apart from every personal figure.
+  business: { accounts: FinAccount[]; transactions: FinTransaction[] }
 }
 
 const n = (v: unknown) => (v === null || v === undefined ? null : Number(v))
@@ -93,14 +95,21 @@ export async function loadFinance(): Promise<Finance> {
     all<FinTransaction>('fin_transactions', 'posted_on'),
     all<FinSnapshotRow>('fin_portfolio_snapshots', 'as_of'),
   ])
-  const transactions = txRows.map((t) => ({ ...t, amount: Number(t.amount) }))
   if (settings.error) throw settings.error
-  Object.assign(owners, ((settings.data?.data ?? {}) as { owners?: Record<string, OwnerInfo> }).owners ?? {})
+  const sd = (settings.data?.data ?? {}) as { owners?: Record<string, OwnerInfo>; statement_accounts?: Record<string, string> }
+  Object.assign(owners, sd.owners ?? {})
+  const bizOwners = new Set(Object.entries(sd.owners ?? {}).filter(([, o]) => o.business).map(([k]) => k))
+  const bizAccounts = accounts.filter((a) => bizOwners.has(a.owner))
+  const bizIds = new Set(bizAccounts.map((a) => a.id))
+  const isBiz = (label: string) => bizIds.has(sd.statement_accounts?.[label] ?? '')
+  const allTx = txRows.map((t) => ({ ...t, amount: Number(t.amount) }))
+  const transactions = allTx.filter((t) => !isBiz(t.account))
   const holdings = holdingRows.map((h) => ({ ...h, shares: Number(h.shares), last_price: n(h.last_price), risk: h.risk === null ? null : Number(h.risk) })).filter((h) => h.shares > 0)
   return {
     holdings,
     prices: await loadPrices([...new Set(holdings.map((h) => h.symbol))]),
-    accounts,
+    accounts: accounts.filter((a) => !bizIds.has(a.id)),
+    business: { accounts: bizAccounts, transactions: allTx.filter((t) => isBiz(t.account)) },
     balances: balances.map((b) => ({ ...b, amount: Number(b.amount) })),
     properties: properties.map((p) => ({
       ...p, share: Number(p.share), value: n(p.value), mortgage: Number(p.mortgage ?? 0), sale_price: n(p.sale_price), cost: n(p.cost), prev_value: n(p.prev_value),
