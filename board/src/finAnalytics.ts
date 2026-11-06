@@ -97,8 +97,16 @@ export function investments(f: Finance, fx: Fx) {
   const inv = pieces(f, fx).filter((p) => p.cls === 'Stocks and funds' || p.cls === 'Crypto')
   const listed = inv.filter((p) => p.holding)
   const sum = total(inv)
-  const weights = listed.map((p) => p.value / (total(listed) || 1))
-  const sorted = [...listed].sort((a, b) => b.value - a.value)
+  // The same investment held in several accounts (for example Tether in three wallets) counts as one holding.
+  const bySymbol = new Map<string, { label: string; value: number }>()
+  for (const p of listed) {
+    const g = bySymbol.get(p.holding!.symbol) ?? { label: p.label, value: 0 }
+    g.value += p.value
+    bySymbol.set(p.holding!.symbol, g)
+  }
+  const merged = [...bySymbol.values()]
+  const weights = merged.map((p) => p.value / (total(merged) || 1))
+  const sorted = [...merged].sort((a, b) => b.value - a.value)
   const rated = inv.filter((p) => p.risk !== null)
   const movers = listed.map((p) => {
     const q = f.prices[p.holding!.symbol]
@@ -121,7 +129,7 @@ export function investments(f: Finance, fx: Fx) {
     top1: sorted[0] ? { name: sorted[0].label, pct: sorted[0].value / (sum || 1) } : null,
     top5: total(sorted.slice(0, 5)) / (sum || 1),
     effectiveN: weights.length ? 1 / weights.reduce((s, x) => s + x * x, 0) : 0,
-    listedCount: listed.length,
+    listedCount: merged.length,
     riskAvg: rated.reduce((s, p) => s + p.value * (p.risk ?? 0), 0) / (total(rated) || 1),
     ratedShare: total(rated) / (sum || 1),
     gainers: movers.slice(0, 3).filter((x) => x.move > 0),
