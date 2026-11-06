@@ -117,7 +117,7 @@ function SnapshotForm({ f, fx, userId, onDone }: { f: Finance; fx: Fx; userId: s
     for (const b of f.balances) if (!seen.has(b.account_id) || b.as_of > seen.get(b.account_id)!) { seen.set(b.account_id, b.as_of); m.set(b.account_id, b.amount) }
     return m
   }, [f.balances])
-  const active = f.accounts.filter((a) => a.active && !holdingsOf(f, a.id).length)
+  const active = [...f.accounts, ...f.business.accounts].filter((a) => a.active && !holdingsOf(f, a.id).length)
   const [asOf, setAsOf] = useState(vanDate())
   const [vals, setVals] = useState<Record<string, string>>(() => Object.fromEntries(active.map((a) => [a.id, String(latest.get(a.id) ?? '')])))
   const [msg, setMsg] = useState<string | null>(null)
@@ -703,6 +703,28 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
             })}
           </div>
         </section>
+
+        {f.business.accounts.length > 0 && (
+          <section className="sub-panel span-2">
+            <h3>Business 業務 <span className="sub inline">kept out of personal net worth, spending and alerts</span></h3>
+            <div className="tbl-wrap"><table className="tbl">
+              <thead><tr><th>Account</th><th>Type</th><th className="n">Balance</th></tr></thead>
+              <tbody>
+                {f.business.accounts.filter((a) => a.active).map((a) => {
+                  const b = latest.get(a.id)
+                  return (
+                    <tr key={a.id}>
+                      <td>{ownerName(a.owner)} · {a.institution} {a.name}{a.note && <span className="sub">{a.note}</span>}</td>
+                      <td><span className={`pill k-${a.kind}`}>{KIND[a.kind][0]}</span></td>
+                      <td className="n">{b ? (show ? orig(b.amount, a.currency) : '••••') : '-'}<span className="sub">{b ? `as of ${b.as_of}` : 'no balance yet'}</span></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table></div>
+            {f.business.transactions.length > 0 && <p className="sub">{f.business.transactions.length} business statement lines are stored and left out of the personal Income and spending figures.</p>}
+          </section>
+        )}
 
         <YieldCheck f={f} fx={fx} show={show} userId={userId} onDone={onReload} />
 
