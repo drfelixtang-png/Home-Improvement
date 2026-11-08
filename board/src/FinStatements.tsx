@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { vanDate } from './me'
 import { ownerName } from './finance'
 import type { Finance } from './finance'
-import { tracker, updateSource } from './finStatements'
+import { nextStatementDay, ordinal, tracker, updateSource } from './finStatements'
 import type { MonthState, SourceStatus } from './finStatements'
 
 const STATE: Record<SourceStatus['state'], { label: string; cls: string }> = {
@@ -42,7 +42,7 @@ function Row({ x, f, userId, onDone, today }: { x: SourceStatus; f: Finance; use
   const st = STATE[x.state]
   return (
     <tr className={x.state === 'closed' ? 'muted' : ''}>
-      <td>{x.s.label}<span className="sub">{ownerName(x.s.owner)} · {KIND_LABEL[x.s.kind]}{x.s.note ? ` · ${x.s.note}` : ''}</span></td>
+      <td>{x.s.label}<span className="sub">{ownerName(x.s.owner)} · {KIND_LABEL[x.s.kind]}{x.s.folder ? ` · upload to ${x.s.folder}` : ''}{x.s.note ? ` · ${x.s.note}` : ''}</span></td>
       <td><span className={`pill ${st.cls ? `lvl-${st.cls === 'crit' ? 'act' : st.cls === 'warn' ? 'decide' : 'watch'}` : ''}`}>{st.label}</span>
         <span className="sub">{x.state === 'due' || x.state === 'late' ? `Statement to ${fmt(x.lastEnd)}${x.daysLate ? `, ${x.daysLate} days ago` : ''}` : x.state === 'ok' ? `Next around ${fmt(x.nextEnd)}` : x.state === 'uploaded' ? `Uploaded ${fmt(x.s.uploaded_on ?? null)}` : x.s.closed_on ? `Closed ${fmt(x.s.closed_on)}` : ''}</span></td>
       <td className="mono">{fmt(x.coveredTo)}</td>
@@ -67,6 +67,8 @@ function Row({ x, f, userId, onDone, today }: { x: SourceStatus; f: Finance; use
 export function FinStatements({ f, userId, onDone }: { f: Finance; userId: string; onDone: () => void }) {
   const today = vanDate()
   const t = useMemo(() => tracker(f, today), [f, today])
+  const next = useMemo(() => nextStatementDay(f, today), [f, today])
+  const folders = (xs: SourceStatus[]) => [...new Set(xs.map((x) => x.s.folder).filter(Boolean))].join(', ')
   if (!t.list.length) return <section className="sub-panel span-2"><p className="sub">No statement sources are set up yet.</p></section>
   const order: Record<SourceStatus['state'], number> = { late: 0, due: 1, uploaded: 2, ok: 3, closed: 4 }
   const list = [...t.list].sort((a, b) => order[a.state] - order[b.state] || a.s.label.localeCompare(b.s.label))
@@ -80,8 +82,9 @@ export function FinStatements({ f, userId, onDone }: { f: Finance; userId: strin
           <div className="stat"><b>{t.uploaded.length}</b><span>Uploaded, waiting to import</span></div>
           <div className="stat"><b>{t.gaps}</b><span>Missing months in total</span></div>
         </div>
+        <p className="fin-issue-action"><span className="lbl">Statement day</span> {next.isToday ? 'Today' : new Date(`${next.date}T12:00:00`).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}, the {ordinal(next.plan.day)} of each month: download {next.ready.length ? <b>{next.ready.map((x) => x.s.label).join(', ')}</b> : 'nothing new'} and put the PDFs in the matching subfolder of &quot;{next.plan.folder}&quot; on Google Drive{folders(next.ready) ? ` (${folders(next.ready)})` : ''}.{next.plan.import_day ? ` Claude imports them automatically on the ${ordinal(next.plan.import_day)}.` : ' Then ask Claude to import them.'}</p>
         {t.due.length > 0 && (
-          <p className="fin-issue-action"><span className="lbl">To do</span> Download {t.due.map((x) => x.s.label).join(', ')} from online banking, put the PDFs in a subfolder of &quot;Temp Bank Statement Input&quot; on Google Drive, press &quot;I uploaded it&quot;, and ask Claude to import them.</p>
+          <p className="sub">Already out now: {t.due.map((x) => x.s.label).join(', ')}. Press &quot;I uploaded it&quot; after putting them in the folder.</p>
         )}
         <div className="tbl-wrap"><table className="tbl stmt-tbl">
           <thead><tr><th>Account</th><th>Status</th><th>Imported to</th><th>Last 36 months</th><th /></tr></thead>
