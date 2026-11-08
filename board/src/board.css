@@ -519,3 +519,13 @@ a.q-link span { font-size: 0.8em; color: var(--muted); }
 .fin-scen input { width: 5.5em; }
 .hi-edit .check { display: flex; align-items: center; gap: 6px; }
 ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
+
+/* Statement tracker */
+.stmt-strip { display: grid; grid-template-columns: repeat(36, minmax(4px, 1fr)); gap: 2px; min-width: 216px; max-width: 360px; }
+.sc { display: inline-block; height: 12px; min-width: 6px; border-radius: 2px; background: var(--chip); }
+.sc.covered { background: var(--good); }
+.sc.due { background: var(--warn); }
+.sc.missing { background: var(--crit); }
+.sc.quiet { background: #4a5a6e; }
+.sc.future, .sc.before { background: transparent; border: 1px solid var(--line); }
+.legend .sc { width: 12px; }

@@ -4,6 +4,7 @@ import { mix, netWorth, ownerManager, ownerName, toCad } from './finance'
 import type { Finance, Fx } from './finance'
 import * as A from './finAnalytics'
 import { yieldCheck } from './finYield'
+import { tracker } from './finStatements'
 
 export type Level = 'act' | 'decide' | 'watch'
 export interface Issue {
@@ -130,8 +131,19 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
       action: 'Open "Bank statements", then "To review", and confirm each one.',
     })
   }
+  // Statement tracker: new statements ready to download and gaps, per account.
+  const st = tracker(f, today)
+  if (st.due.length) {
+    const late = st.late.length
+    issues.push({
+      key: `fin:stmt-due:${today.slice(0, 7)}:${st.due.map((x) => x.s.key).sort().join(',')}`, level: late ? 'act' : 'watch', area: 'Records', tab: 'statements',
+      title: `${st.due.length} new statement${st.due.length > 1 ? 's are' : ' is'} ready to download${late ? ` (${late} overdue)` : ''}`,
+      detail: () => st.due.map((x) => `${x.s.label} (to ${x.lastEnd})`).join('; ') + '. Until they are imported, recent spending and income use the estimate.',
+      action: 'Download them from online banking into the "Temp Bank Statement Input" folder on Google Drive, press "I uploaded it" on the Statements tab, and ask Claude to import them.',
+    })
+  }
   const lastTx = f.transactions.map((t) => t.posted_on).sort().pop()
-  if (lastTx && days(lastTx, today) > 45) {
+  if (!st.list.length && lastTx && days(lastTx, today) > 45) {
     issues.push({
       key: `fin:statements:${lastTx.slice(0, 7)}`, level: 'act', area: 'Income and spending', tab: 'cashflow',
       title: `Bank statements stop at ${lastTx}`,

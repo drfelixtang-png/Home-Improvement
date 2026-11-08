@@ -14,7 +14,7 @@ const LEVEL: Record<Level, { label: string; zh: string; note: string }> = {
   decide: { label: 'Decide', zh: '需要決定', note: 'A choice only you can make.' },
   watch: { label: 'Watch', zh: '留意', note: 'No action yet; keep an eye on it.' },
 }
-const TAB_NAME: Record<string, string> = { overview: 'Overview', networth: 'Net worth', investments: 'Investments', accounts: 'Accounts', cashflow: 'Income and spending', property: 'Property', history: 'History' }
+const TAB_NAME: Record<string, string> = { overview: 'Overview', networth: 'Net worth', investments: 'Investments', accounts: 'Accounts', cashflow: 'Income and spending', property: 'Property', history: 'History', bills: 'Bills', plan: 'Retirement', statements: 'Statements' }
 
 function money(v: number): string {
   return `${v < 0 ? '−' : ''}CA$${Math.abs(v).toLocaleString('en-CA', { maximumFractionDigits: 0 })}`
