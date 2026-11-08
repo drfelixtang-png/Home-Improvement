@@ -308,7 +308,11 @@ export function MePage({ settings, checkins, onReload, onSaveSettings, lang }: {
   const byDay = useMemo(() => new Map(checkins.map((c) => [c.day, c])), [checkins])
   const c = byDay.get(day) ?? emptyCheckin(day)
   const prev = byDay.get(addDays(day, -1))
-  const n = Math.max(1, daysBetween(settings.journey_start, today) + 1)
+  // The day being recorded (today or yesterday) and its place in the 1000-day journey.
+  const n = Math.max(1, daysBetween(settings.journey_start, day) + 1)
+  const dt = new Date(`${day}T12:00:00`)
+  const dateEn = dt.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })
+  const dateZh = dt.toLocaleDateString('zh-Hant', { month: 'long', day: 'numeric', weekday: 'long' })
   const eveningFirst = which === 'yesterday' || vanHour() >= 15
   const habits = settings.habits ?? []
   const areas = settings.areas ?? []
@@ -320,8 +324,8 @@ export function MePage({ settings, checkins, onReload, onSaveSettings, lang }: {
     <main className="detail me">
       <div className="journey">
         <div>
-          <span className="big">Day {n}</span><span className="sub inline"> of 1000 · 第 {n} 日</span>
-          <p className="sub">0.1% better each day: ×{Math.pow(1.001, n).toFixed(3)} today, ×{Math.pow(1.001, 1000).toFixed(2)} by day 1000.</p>
+          <span className="big journey-date">{dateEn}</span> <span className="tc journey-zh">{dateZh}</span>
+          <p className="sub">Day {n} of 1000 · 第 {n} 日 · 0.1% better each day: ×{Math.pow(1.001, n).toFixed(3)} {which === 'today' ? 'today' : 'yesterday'}, ×{Math.pow(1.001, 1000).toFixed(2)} by day 1000.</p>
         </div>
         <div className="day-switch" role="group" aria-label="Which day to record">
           <button type="button" className={which === 'today' ? 'on' : ''} aria-pressed={which === 'today'} onClick={() => setWhich('today')}>Today 今日</button>
