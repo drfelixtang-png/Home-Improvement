@@ -9,6 +9,7 @@ import {
 } from './finance'
 import { FinOverview } from './FinOverview'
 import { YieldCheck } from './FinYield'
+import { FinPlan } from './FinPlan'
 import { BudgetEditor, Bills } from './FinRecent'
 import { AccountsAnalytics, AssessmentChart, PortfolioSnapshots, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
 import { RISK_LABEL } from './finAnalytics'
@@ -27,6 +28,7 @@ const FIN_TABS = [
   { key: 'bills', label: 'Bills', zh: '固定支出' },
   { key: 'property', label: 'Property', zh: '物業' },
   { key: 'history', label: 'History', zh: '歷史' },
+  { key: 'plan', label: 'Retirement', zh: '退休' },
 ]
 const KIND: Record<AccountKind, [string, string]> = {
   cash: ['Cash', '現金'], gic: ['GIC', '定期'], investment: ['Investment', '投資'],
@@ -810,6 +812,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
         <AssessmentChart f={f} show={show} />
       </div>
       )}
+
+      {tab === 'plan' && <FinPlan f={f} fx={fx} show={show} userId={userId} onDone={onReload} />}
 
       {tab === 'history' && (
       <div className="detail-grid">

@@ -511,3 +511,11 @@ a.q-link span { font-size: 0.8em; color: var(--muted); }
 
 .h-grid.weeks { grid-template-columns: repeat(8, 1fr); }
 .h-grid.weeks .hd { height: 14px; }
+
+/* Retirement plan */
+.fin-chart .pline.s1 { stroke: #8fb8de; } .fin-chart .pline.s2 { stroke: #5fcf8f; } .fin-chart .pline.s3 { stroke: #e07a6b; }
+.fin-chart.plan { max-width: 980px; }
+.fin-scen { border: 1px solid var(--line); padding: 6px 10px; display: flex; gap: 8px; }
+.fin-scen input { width: 5.5em; }
+.hi-edit .check { display: flex; align-items: center; gap: 6px; }
+ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
