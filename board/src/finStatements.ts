@@ -16,6 +16,7 @@ export interface StatementSource {
   active: boolean
   closed_on?: string | null
   note?: string
+  folder?: string             // Google Drive subfolder to upload to, for example "TD"
 }
 export type MonthState = 'covered' | 'missing' | 'quiet' | 'due' | 'future' | 'before'
 export interface SourceStatus {
@@ -84,6 +85,24 @@ export function status(s: StatementSource, today: string, monthsShown = 36): Sou
     state = s.uploaded_on && s.uploaded_on >= lastEnd ? 'uploaded' : daysLate > 14 || behind > 1 ? 'late' : 'due'
   }
   return { s, coveredTo, lastEnd, nextEnd, state, daysLate, missing, months }
+}
+
+export const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`
+
+// One monthly "statement day": download everything that is out by then in one go.
+export interface StatementPlan { day: number; folder: string; import_day?: number }
+export function statementPlan(f: Finance): StatementPlan {
+  const p = (f.settings as FinSettings & { statement_plan?: StatementPlan }).statement_plan
+  return { day: p?.day ?? 25, folder: p?.folder ?? 'Morning Board Finance Tab Inputs', import_day: p?.import_day }
+}
+// The next statement day on or after today, and the sources whose statement will be out by then.
+export function nextStatementDay(f: Finance, today: string) {
+  const plan = statementPlan(f)
+  const ym = today.slice(0, 7)
+  let d = endIn(ym, plan.day)
+  if (d < today) d = endIn(addMonths(ym, 1), plan.day)
+  const ready = sources(f).filter((s) => s.active).map((s) => status(s, d)).filter((x) => x.state !== 'ok' && x.state !== 'closed')
+  return { date: d, isToday: d === today, ready, plan }
 }
 
 export function tracker(f: Finance, today: string) {

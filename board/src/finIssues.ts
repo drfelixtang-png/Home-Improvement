@@ -4,7 +4,7 @@ import { mix, netWorth, ownerManager, ownerName, toCad } from './finance'
 import type { Finance, Fx } from './finance'
 import * as A from './finAnalytics'
 import { yieldCheck } from './finYield'
-import { tracker } from './finStatements'
+import { ordinal, statementPlan, tracker } from './finStatements'
 
 export type Level = 'act' | 'decide' | 'watch'
 export interface Issue {
@@ -133,13 +133,14 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
   }
   // Statement tracker: new statements ready to download and gaps, per account.
   const st = tracker(f, today)
-  if (st.due.length) {
+  const stDay = Number(today.slice(8, 10)) >= statementPlan(f).day
+  if (st.due.length && (stDay || st.late.length)) {
     const late = st.late.length
     issues.push({
       key: `fin:stmt-due:${today.slice(0, 7)}:${st.due.map((x) => x.s.key).sort().join(',')}`, level: late ? 'act' : 'watch', area: 'Records', tab: 'statements',
       title: `${st.due.length} new statement${st.due.length > 1 ? 's are' : ' is'} ready to download${late ? ` (${late} overdue)` : ''}`,
       detail: () => st.due.map((x) => `${x.s.label} (to ${x.lastEnd})`).join('; ') + '. Until they are imported, recent spending and income use the estimate.',
-      action: 'Download them from online banking into the "Temp Bank Statement Input" folder on Google Drive, press "I uploaded it" on the Statements tab, and ask Claude to import them.',
+      action: `Download them from online banking into the matching subfolder of "${statementPlan(f).folder}" on Google Drive and press "I uploaded it" on the Statements tab.${statementPlan(f).import_day ? ` Claude imports them on the ${ordinal(statementPlan(f).import_day!)}.` : ''}`,
     })
   }
   const lastTx = f.transactions.map((t) => t.posted_on).sort().pop()
