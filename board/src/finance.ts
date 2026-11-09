@@ -20,7 +20,7 @@ export interface FinProperty {
   details?: { owner?: string; [k: string]: unknown }
 }
 export interface FinIe {
-  id: string; month: string; kind: 'income' | 'expense'; line: string; amount: number
+  id: string; month: string; kind: 'income' | 'expense' | 'capital'; line: string; amount: number
   currency: Cur; covers_months: number; source: string; note: string
 }
 export interface FinHistory { as_of: string; measure: string; category: string | null; amount: number; currency: Cur; note: string }
@@ -292,13 +292,27 @@ export function monthly(f: Finance, fx: Fx, kind: 'income' | 'expense', months: 
 
 export const sumMap = (m?: Map<string, number>) => (m ? [...m.values()].reduce((s, v) => s + v, 0) : 0)
 
-// Spending by line for one calendar year, in CAD.
-export function yearLines(f: Finance, fx: Fx, year: number, kind: 'income' | 'expense' = 'expense'): { line: string; total: number }[] {
+// Spending by line for one calendar year, in CAD. An amount spread over several months
+// (a 6-monthly payout, or a car spread over 8 years) counts only the months that fall in this year.
+export function yearLines(f: Finance, fx: Fx, year: number, kind: 'income' | 'expense' | 'capital' = 'expense'): { line: string; total: number }[] {
   const m = new Map<string, number>()
   for (const r of f.ie) {
-    if (r.kind !== kind || !r.month.startsWith(String(year))) continue
-    m.set(r.line, (m.get(r.line) ?? 0) + toCad(r.amount, r.currency, fx))
+    if (r.kind !== kind) continue
+    const per = toCad(r.amount, r.currency, fx) / r.covers_months
+    for (let i = 0; i < r.covers_months; i++) {
+      if (!addMonth(monthKey(r.month), i).startsWith(String(year))) continue
+      m.set(r.line, (m.get(r.line) ?? 0) + per)
+    }
   }
+  return [...m.entries()].map(([line, total]) => ({ line, total })).sort((a, b) => b.total - a.total)
+}
+
+// One-time items for a year (statement rows marked one-time, and spreadsheet rows kept as one-time). Not counted as spending.
+export function yearOneTime(f: Finance, fx: Fx, year: number): { line: string; total: number }[] {
+  const m = new Map<string, number>()
+  const add = (line: string, v: number) => m.set(line, (m.get(line) ?? 0) + v)
+  for (const t of f.transactions) if (t.kind === 'capital' && t.amount < 0 && t.posted_on.startsWith(String(year))) add(t.line, -toCad(t.amount, t.currency, fx))
+  for (const r of yearLines(f, fx, year, 'capital')) add(r.line, r.total)
   return [...m.entries()].map(([line, total]) => ({ line, total })).sort((a, b) => b.total - a.total)
 }
 
