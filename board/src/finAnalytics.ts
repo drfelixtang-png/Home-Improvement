@@ -191,7 +191,8 @@ const CATEGORY: [RegExp, string][] = [
   [/Allowance/i, 'Family support'],
   [/^Cash/i, 'Cash withdrawals'],
   [/Credit Card/i, 'Card spending, not itemised'],
-  [/Rental licences|temp work/i, 'Work and rental costs'],
+  [/Rental licences|temp work|real estate work/i, 'Work and rental costs'],
+  [/E-transfers sent/i, 'E-transfers sent'],
   [/Subscription/i, 'Subscriptions'],
 ]
 export const categoryOf = (line: string) => CATEGORY.find(([re]) => re.test(line))?.[1] ?? 'Other'

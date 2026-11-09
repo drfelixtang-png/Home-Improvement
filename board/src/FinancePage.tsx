@@ -327,7 +327,7 @@ function Holdings({ f, a, fx, show, userId, onDone }: { f: Finance; a: FinAccoun
 
 // ================================================================= bank statements
 const KIND_LABEL: Record<TxKind, string> = { income: 'Income', expense: 'Spending', transfer: 'Own transfer', capital: 'One-time' }
-const CAPITAL_LINES = ['Large deposit', 'Large cheque', 'Large cash withdrawal', 'Mortgage payout', 'Investment trades']
+const CAPITAL_LINES = ['Large deposit', 'Large cheque', 'Large cash withdrawal', 'Mortgage payout', 'Investment trades', 'Shuswap building cost']
 
 function categories(f: Finance): { value: string; label: string }[] {
   const used = (k: TxKind) => [...new Set([...f.transactions.filter((t) => t.kind === k).map((t) => t.line), ...(k === 'income' ? f.settings.income_lines ?? [] : k === 'expense' ? f.settings.expense_lines ?? [] : [])])].sort()
