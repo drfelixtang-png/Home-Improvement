@@ -5,7 +5,7 @@ import { vanDate } from './me'
 import {
   accountAmount, updateTransactions, addIe, addMonth, holdingPrice, holdingsOf, ieYears, latestBalances, mix, monthly, monthsBack, netWorth,
   saveBalances, saveFinSettings, saveHolding,
-  sumMap, toCad, updateProperty, yearLines,
+  sumMap, toCad, updateProperty, yearLines, yearOneTime,
 } from './finance'
 import { FinOverview } from './FinOverview'
 import { YieldCheck } from './FinYield'
@@ -170,10 +170,10 @@ function IeForm({ f, userId, onDone }: { f: Finance; userId: string; onDone: () 
       <label>Line<input required list="fin-lines" value={v.line} onChange={(e) => setV({ ...v, line: e.target.value })} /><datalist id="fin-lines">{lines.map((l) => <option key={l} value={l} />)}</datalist></label>
       <label>Amount<input required inputMode="decimal" value={v.amount} onChange={(e) => setV({ ...v, amount: e.target.value.replace(/[^0-9.-]/g, '') })} /></label>
       <label>Currency<select value={v.currency} onChange={(e) => setV({ ...v, currency: e.target.value as Cur })}><option>CAD</option><option>USD</option><option>HKD</option></select></label>
-      <label>Spread over months<input type="number" min={1} max={24} value={v.covers} onChange={(e) => setV({ ...v, covers: e.target.value })} /></label>
+      <label>Spread over months<input type="number" min={1} max={240} value={v.covers} onChange={(e) => setV({ ...v, covers: e.target.value })} /></label>
       <label className="wide">Note<input value={v.note} onChange={(e) => setV({ ...v, note: e.target.value })} /></label>
       <div className="form-row"><button type="submit" className="btn">Add 加入</button>{msg && <span className="sub" role="status">{msg}</span>}</div>
-      <p className="sub wide">For income paid every few months (for example a 6-monthly payout), type the whole payment in the month it arrived and spread it over the months it covers.</p>
+      <p className="sub wide">For income paid every few months (for example a 6-monthly payout), type the whole payment in the month it arrived and spread it over the months it covers. For a long-lived purchase such as a car, type the price in the month you bought it and spread it over the years you expect to keep it (96 months for 8 years), so the monthly average stays true.</p>
     </form>
   )
 }
@@ -327,7 +327,7 @@ function Holdings({ f, a, fx, show, userId, onDone }: { f: Finance; a: FinAccoun
 
 // ================================================================= bank statements
 const KIND_LABEL: Record<TxKind, string> = { income: 'Income', expense: 'Spending', transfer: 'Own transfer', capital: 'One-time' }
-const CAPITAL_LINES = ['Large deposit', 'Large cheque', 'Large cash withdrawal', 'Mortgage payout', 'Investment trades', 'Shuswap building cost']
+const CAPITAL_LINES = ['Large deposit', 'Large cheque', 'Large cash withdrawal', 'Mortgage payout', 'Investment trades', 'Shuswap building cost', 'Relocation and home setup (one-time)']
 
 function categories(f: Finance): { value: string; label: string }[] {
   const used = (k: TxKind) => [...new Set([...f.transactions.filter((t) => t.kind === k).map((t) => t.line), ...(k === 'income' ? f.settings.income_lines ?? [] : k === 'expense' ? f.settings.expense_lines ?? [] : [])])].sort()
@@ -590,6 +590,7 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
   }, [f.history, fx])
   const lines = useMemo(() => yearLines(f, fx, year), [f, fx, year])
   const linesIncome = useMemo(() => yearLines(f, fx, year, 'income'), [f, fx, year])
+  const oneTime = useMemo(() => yearOneTime(f, fx, year), [f, fx, year])
 
   const owners = [...new Set(f.accounts.map((a) => a.owner))]
   const latest = latestBalances(f)
@@ -792,7 +793,13 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
               </tbody>
             </table></div>
           </div>
-          <p className="sub">Amounts kept in Hong Kong dollars are shown at today&apos;s rate. The spreadsheet tracked spending until December 2023.</p>
+          {oneTime.length > 0 && (
+            <div className="tbl-wrap"><table className="tbl">
+              <thead><tr><th>One-time money out, not counted as spending 一次性</th><th className="n">Year</th></tr></thead>
+              <tbody>{oneTime.map((l) => <tr key={l.line}><td>{l.line}</td><td className="n">{M(l.total)}</td></tr>)}</tbody>
+            </table></div>
+          )}
+          <p className="sub">Amounts kept in Hong Kong dollars are shown at today&apos;s rate. The spreadsheet tracked spending until December 2023. Purchases spread over several years count only their share for each year.</p>
         </section>
       </div>
       )}
