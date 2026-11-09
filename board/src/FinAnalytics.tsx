@@ -169,11 +169,11 @@ export function AccountsAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: b
 }
 
 // ================================================================= income and spending
-function Bars({ series, show }: { series: { m: string; inc: number; exp: number }[]; show: boolean }) {
+function Bars({ series, show, yearly = false }: { series: { m: string; inc: number; exp: number }[]; show: boolean; yearly?: boolean }) {
   const max = Math.max(1, ...series.flatMap((s) => [s.inc, s.exp]))
   const W = 720, H = 180, B = 22, bw = (W / series.length) * 0.36
   return (
-    <svg className="fin-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Income and spending by month">
+    <svg className="fin-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={yearly ? 'Income and spending by year' : 'Income and spending by month'}>
       {series.map((s, i) => {
         const x = (i + 0.5) * (W / series.length)
         const h1 = (s.inc / max) * (H - B - 8), h2 = (s.exp / max) * (H - B - 8)
@@ -181,11 +181,33 @@ function Bars({ series, show }: { series: { m: string; inc: number; exp: number 
           <g key={s.m}>
             <rect x={x - bw - 1} y={H - B - h1} width={bw} height={h1} className="bar-in"><title>{`${s.m} income ${show ? money(s.inc) : ''}`}</title></rect>
             <rect x={x + 1} y={H - B - h2} width={bw} height={h2} className="bar-out"><title>{`${s.m} spending ${show ? money(s.exp) : ''}`}</title></rect>
-            <text x={x} y={H - 6} textAnchor="middle">{s.m.slice(2).replace('-', '/')}</text>
+            <text x={x} y={H - 6} textAnchor="middle">{yearly ? `'${s.m.slice(2)}` : s.m.slice(2).replace('-', '/')}</text>
           </g>
         )
       })}
     </svg>
+  )
+}
+
+type YearRow = { m: string; inc: number; exp: number; recorded: number; partial: boolean }
+function YearTable({ rows, show }: { rows: YearRow[]; show: boolean }) {
+  const M = (v: number) => (show ? money(v) : '••••')
+  return (
+    <div className="tbl-wrap"><table className="tbl">
+      <thead><tr><th>Year</th><th className="n">Income</th><th className="n">Spending</th><th className="n">Kept</th><th className="n">Spending a month</th></tr></thead>
+      <tbody>{[...rows].reverse().map((r) => {
+        const kept = r.inc - r.exp
+        return (
+          <tr key={r.m}>
+            <td>{r.m}{r.partial ? ' (so far)' : ''}{r.recorded === 0 ? <span className="sub inline"> no spending records</span> : r.recorded < 12 && !r.partial ? <span className="sub inline"> {r.recorded} {r.recorded === 1 ? 'month' : 'months'} recorded</span> : null}</td>
+            <td className="n">{r.inc ? M(r.inc) : '-'}</td>
+            <td className="n">{r.exp ? M(r.exp) : '-'}</td>
+            <td className={`n ${kept < 0 ? 'warn' : ''}`}>{r.inc || r.exp ? M(kept) : '-'}</td>
+            <td className="n">{r.recorded ? M(r.exp / r.recorded) : '-'}</td>
+          </tr>
+        )
+      })}</tbody>
+    </table></div>
   )
 }
 
@@ -208,8 +230,9 @@ export function CashflowAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: b
         <Ratio value={show ? money(c.avgSpend) : '••••'} label="Spending a month, recorded months" />
         <Ratio value={pct(c.passiveCover)} label="Spending covered by passive income" tone={c.passiveCover !== null && c.passiveCover < 1 ? 'warn' : 'good'} />
       </div>
-      <Bars series={c.series} show={show} />
+      <Bars series={c.series} show={show} yearly={c.byYear} />
       <p className="sub legend"><span className="key in" /> Income <span className="key out" /> Spending</p>
+      {c.byYear && <YearTable rows={c.series as YearRow[]} show={show} />}
       <div className="fin-bd-grid">
         <Breakdown title="Spending by category 支出類別" items={c.byCategory} show={show} />
         <Breakdown title="Fixed or flexible 固定或彈性" items={c.fixedFlex} show={show} note="Fixed costs are hard to cut quickly; flexible ones are where savings usually come from." />

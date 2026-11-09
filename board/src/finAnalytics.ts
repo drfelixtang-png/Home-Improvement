@@ -202,11 +202,16 @@ export const incomeType = (line: string) =>
 
 export function periods(f: Finance): { key: string; label: string }[] {
   const years = [...new Set(f.ie.map((r) => r.month.slice(0, 4)))].sort().reverse()
-  return [{ key: 'last12', label: 'Last 12 months' }, ...years.map((y) => ({ key: y, label: y }))]
+  return [{ key: 'last12', label: 'Last 12 months' }, { key: 'last20y', label: 'Last 20 years, by year' }, ...years.map((y) => ({ key: y, label: y }))]
 }
 
 export function cashflow(f: Finance, fx: Fx, period: string, today: string) {
-  const months = period === 'last12' ? monthsBack(addMonth(today.slice(0, 7), -1), 12) : Array.from({ length: 12 }, (_, i) => `${period}-${String(i + 1).padStart(2, '0')}`)
+  const lastMonth = addMonth(today.slice(0, 7), -1)
+  const firstYear = Number(lastMonth.slice(0, 4)) - 19
+  const byYear = period === 'last20y'
+  const months = period === 'last12' ? monthsBack(lastMonth, 12)
+    : byYear ? monthsBack(lastMonth, (Number(lastMonth.slice(0, 4)) - firstYear) * 12 + Number(lastMonth.slice(5, 7)))
+    : Array.from({ length: 12 }, (_, i) => `${period}-${String(i + 1).padStart(2, '0')}`)
   const inc = monthly(f, fx, 'income', months)
   const exp = monthly(f, fx, 'expense', months)
   const byLineExp = new Map<string, number>(); const byLineInc = new Map<string, number>()
@@ -225,7 +230,8 @@ export function cashflow(f: Finance, fx: Fx, period: string, today: string) {
   for (const t of f.transactions) if (t.kind === 'expense' && months.includes(t.posted_on.slice(0, 7))) add(payees, t.description, -toCad(t.amount, t.currency, fx))
   return {
     months, income, spending,
-    series: months.map((m) => ({ m, inc: sumMap(inc.get(m)), exp: sumMap(exp.get(m)) })),
+    series: byYear ? yearSeries(months, inc, exp) : months.map((m) => ({ m, inc: sumMap(inc.get(m)), exp: sumMap(exp.get(m)) })),
+    byYear,
     byCategory: slices(cats), fixedFlex: slices(fixed), incomeTypes: slices(itype),
     savingsRate: income > 0 ? (income - spending) / income : null,
     avgSpend: recorded.length ? spending / recorded.length : 0,
@@ -233,6 +239,23 @@ export function cashflow(f: Finance, fx: Fx, period: string, today: string) {
     passiveCover: spending > 0 ? passive / spending : null,
     payees: slices(payees).slice(0, 10),
   }
+}
+
+// Income and spending added up by calendar year, with the number of months that have spending records.
+function yearSeries(months: string[], inc: Map<string, Map<string, number>>, exp: Map<string, Map<string, number>>) {
+  const out = new Map<string, { m: string; inc: number; exp: number; recorded: number; partial: boolean }>()
+  for (const mo of months) {
+    const y = mo.slice(0, 4)
+    const r = out.get(y) ?? { m: y, inc: 0, exp: 0, recorded: 0, partial: false }
+    r.inc += sumMap(inc.get(mo)); r.exp += sumMap(exp.get(mo)); if (exp.has(mo)) r.recorded += 1
+    out.set(y, r)
+  }
+  const last = months[months.length - 1]
+  const lastYear = out.get(last.slice(0, 4))
+  if (lastYear && !last.endsWith('-12')) lastYear.partial = true
+  const rows = [...out.values()]
+  const first = rows.findIndex((r) => r.inc || r.exp)
+  return first > 0 ? rows.slice(first) : rows // start at the first year with records
 }
 
 // ------------------------------------------------------------------ property
