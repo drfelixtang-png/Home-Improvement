@@ -103,7 +103,8 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
     setMsg('Saving…')
     try { await savePlan(userId, f, draft); setMsg('Saved.'); onDone() } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) }
   }
-  const past = useMemo(() => pastSpending(f, fx, today), [f, fx, today])
+  const [withHousing, setWithHousing] = useState(false)
+  const past = useMemo(() => pastSpending(f, fx, today, withHousing), [f, fx, today, withHousing])
   const middle = p.table.find((t) => t.sc.key === 'middle') ?? p.table[0]
   const who = p.ages.map((a) => `${a.name} ${a.age}`).join(', ')
 
@@ -111,6 +112,11 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
     <div className="detail-grid">
       <section className="sub-panel span-2">
         <h3>Past spending 過往支出 <span className="sub inline">the best guide to future spending</span></h3>
+        <div className="seg-toggle" role="group" aria-label="Mortgage and rent payments">
+          <span className="sub inline">Mortgage and rent payments 按揭及租金</span>
+          <button type="button" className={`btn ghost ${!withHousing ? 'on' : ''}`} aria-pressed={!withHousing} onClick={() => setWithHousing(false)}>Leave out 不計</button>
+          <button type="button" className={`btn ghost ${withHousing ? 'on' : ''}`} aria-pressed={withHousing} onClick={() => setWithHousing(true)}>Include 計入</button>
+        </div>
         <div className="tbl-wrap"><table className="tbl">
           <thead><tr><th>Period</th><th className="n">A month</th><th className="n">A month, without income tax</th><th className="n">Months with records</th><th /></tr></thead>
           <tbody>{past.windows.map((w) => (
@@ -124,7 +130,7 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
           ))}</tbody>
         </table></div>
         {past.byYear.length > 0 && <PastChart byYear={past.byYear} windows={past.windows} show={show} />}
-        <p className="sub">Averages are in the dollars of each year (not adjusted for inflation) and count only months with spending records. One-time items (cars, relocation, building costs) and transfers between own accounts or to family are not spending. "Use" puts the amount into the spending test below; press Save to keep it.</p>
+        <p className="sub">Averages are in the dollars of each year (not adjusted for inflation) and count only months with spending records. One-time items (cars, relocation, building costs) and transfers between own accounts or to family are not spending. {withHousing ? 'Mortgage and rent payments are included.' : 'Mortgage and rent payments are left out, since the home will be owned outright in retirement; past mortgages (Hong Kong, the Shuswap project loan) would otherwise inflate the figures.'} "Use" puts the amount into the spending test below; press Save to keep it.</p>
       </section>
 
       <section className="sub-panel span-2">

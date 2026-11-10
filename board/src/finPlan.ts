@@ -97,20 +97,25 @@ export async function savePlan(userId: string, f: Finance, patch: PlanSettings):
 // Past spending a month, for choosing the plan's spending. Averages count only months that have spending
 // records, so gaps in the records do not pull the average down. One-time items and own transfers are not spending.
 export interface PastWindow { years: number; from: string; to: string; recorded: number; months: number; avg: number; avgNoTax: number }
-export function pastSpending(f: Finance, fx: Fx, today: string): { windows: PastWindow[]; byYear: { year: string; avg: number; recorded: number }[] } {
+// Mortgage and home rent payments. Left out by default: in retirement the home is owned outright,
+// and past mortgages (Hong Kong, the Shuswap project loan) would make past spending look higher than living costs.
+export const HOUSING_PAYMENT = /^Mortgage|Rent paid|Home rent|Housing rent/i
+export function pastSpending(f: Finance, fx: Fx, today: string, withHousing = false): { windows: PastWindow[]; byYear: { year: string; avg: number; recorded: number }[] } {
   const last = addMonth(today.slice(0, 7), -1)
   const months = monthsBack(last, 120)
   const exp = monthly(f, fx, 'expense', months)
-  const total = (m: string, noTax = false) => [...(exp.get(m) ?? [])].reduce((t, [l, v]) => t + (noTax && /Income Tax/i.test(l) ? 0 : v), 0)
+  const total = (m: string, noTax = false) => [...(exp.get(m) ?? [])].reduce((t, [l, v]) => t + ((noTax && /Income Tax/i.test(l)) || (!withHousing && HOUSING_PAYMENT.test(l)) ? 0 : v), 0)
+  // A month counts as recorded when it has spending other than the payments being left out.
+  const has = (m: string) => [...(exp.get(m) ?? [])].some(([l]) => withHousing || !HOUSING_PAYMENT.test(l))
   const windows = [1, 3, 5, 10].map((years) => {
     const ms = months.slice(-years * 12)
-    const rec = ms.filter((m) => exp.has(m))
+    const rec = ms.filter(has)
     const sum = rec.reduce((t, m) => t + total(m), 0), sumNoTax = rec.reduce((t, m) => t + total(m, true), 0)
     return { years, from: ms[0], to: last, recorded: rec.length, months: ms.length, avg: rec.length ? sum / rec.length : 0, avgNoTax: rec.length ? sumNoTax / rec.length : 0 }
   })
   const by = new Map<string, { sum: number; recorded: number }>()
   for (const m of months) {
-    if (!exp.has(m)) continue
+    if (!has(m)) continue
     const y = m.slice(0, 4), r = by.get(y) ?? { sum: 0, recorded: 0 }
     r.sum += total(m); r.recorded += 1; by.set(y, r)
   }
