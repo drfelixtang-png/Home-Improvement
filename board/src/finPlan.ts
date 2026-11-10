@@ -1,7 +1,7 @@
 // Retirement plan: how much can be spent each month so the money lasts to a chosen age.
 // Everything is in today's dollars: returns are turned into "real" returns after inflation,
 // so a spending amount keeps its buying power every year. Settings live in the private database.
-import { netWorth, ownerName, saveFinSettings, toCad } from './finance'
+import { addMonth, monthly, monthsBack, netWorth, ownerName, saveFinSettings, toCad } from './finance'
 import type { Finance, FinSettings, Fx } from './finance'
 
 export interface Scenario { key: string; label: string; ret: number; infl: number }
@@ -92,4 +92,29 @@ export function plan(f: Finance, fx: Fx, people: Person[], today: string) {
 export async function savePlan(userId: string, f: Finance, patch: PlanSettings): Promise<void> {
   const cur = (f.settings as FinSettings & { retirement?: PlanSettings }).retirement ?? {}
   await saveFinSettings(userId, f.settings, { retirement: { ...cur, ...patch } } as Partial<FinSettings>)
+}
+
+// Past spending a month, for choosing the plan's spending. Averages count only months that have spending
+// records, so gaps in the records do not pull the average down. One-time items and own transfers are not spending.
+export interface PastWindow { years: number; from: string; to: string; recorded: number; months: number; avg: number; avgNoTax: number }
+export function pastSpending(f: Finance, fx: Fx, today: string): { windows: PastWindow[]; byYear: { year: string; avg: number; recorded: number }[] } {
+  const last = addMonth(today.slice(0, 7), -1)
+  const months = monthsBack(last, 120)
+  const exp = monthly(f, fx, 'expense', months)
+  const total = (m: string, noTax = false) => [...(exp.get(m) ?? [])].reduce((t, [l, v]) => t + (noTax && /Income Tax/i.test(l) ? 0 : v), 0)
+  const windows = [1, 3, 5, 10].map((years) => {
+    const ms = months.slice(-years * 12)
+    const rec = ms.filter((m) => exp.has(m))
+    const sum = rec.reduce((t, m) => t + total(m), 0), sumNoTax = rec.reduce((t, m) => t + total(m, true), 0)
+    return { years, from: ms[0], to: last, recorded: rec.length, months: ms.length, avg: rec.length ? sum / rec.length : 0, avgNoTax: rec.length ? sumNoTax / rec.length : 0 }
+  })
+  const by = new Map<string, { sum: number; recorded: number }>()
+  for (const m of months) {
+    if (!exp.has(m)) continue
+    const y = m.slice(0, 4), r = by.get(y) ?? { sum: 0, recorded: 0 }
+    r.sum += total(m); r.recorded += 1; by.set(y, r)
+  }
+  const years = [...new Set(months.map((m) => m.slice(0, 4)))]
+  const first = years.findIndex((y) => by.has(y))
+  return { windows, byYear: first < 0 ? [] : years.slice(first).map((year) => { const r = by.get(year); return { year, avg: r ? r.sum / r.recorded : 0, recorded: r?.recorded ?? 0 } }) }
 }

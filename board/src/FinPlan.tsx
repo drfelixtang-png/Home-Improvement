@@ -4,8 +4,8 @@ import type { FormEvent } from 'react'
 import { loadHousehold } from './home'
 import { vanDate } from './me'
 import type { Finance, FinSettings, Fx } from './finance'
-import { DEFAULT_SCENARIOS, HORIZONS, plan, savePlan } from './finPlan'
-import type { Person, PlanSettings, Scenario } from './finPlan'
+import { DEFAULT_SCENARIOS, HORIZONS, pastSpending, plan, savePlan } from './finPlan'
+import type { PastWindow, Person, PlanSettings, Scenario } from './finPlan'
 
 const money = (v: number) => `${v < 0 ? '−' : ''}CA$${Math.abs(Math.round(v)).toLocaleString('en-CA')}`
 const SERIES: Record<string, string> = { cautious: 's3', middle: 's1', hopeful: 's2' }
@@ -38,6 +38,43 @@ function Chart({ paths, startAge, show }: { paths: ReturnType<typeof plan>['path
   </>)
 }
 
+
+const WIN = ['s2', 's1', 's0', 's4']
+function PastChart({ byYear, windows, show }: { byYear: { year: string; avg: number; recorded: number }[]; windows: PastWindow[]; show: boolean }) {
+  const W = 760, H = 220, L = 64, R = 14, T = 14, B = 28
+  const max = Math.max(1, ...byYear.map((y) => y.avg), ...windows.map((w) => w.avg)) * 1.1
+  const n = Math.max(1, byYear.length), step = (W - L - R) / n, bw = step * 0.55
+  const Y = (v: number) => H - B - (v / max) * (H - B - T)
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => t * max)
+  return (<>
+    <svg className="fin-chart plan" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Spending a month in each year, with the 1, 3, 5 and 10 year averages">
+      {ticks.map((t) => (
+        <g key={t}>
+          <line x1={L} x2={W - R} y1={Y(t)} y2={Y(t)} className="grid" />
+          <text x={L - 6} y={Y(t) + 4} textAnchor="end">{show ? `${(t / 1000).toFixed(t && t < 10000 ? 1 : 0)}k` : '•'}</text>
+        </g>
+      ))}
+      {byYear.map((y, i) => {
+        const x = L + i * step + (step - bw) / 2
+        return (
+          <g key={y.year}>
+            <rect x={x} y={Y(y.avg)} width={bw} height={H - B - Y(y.avg)} className="bar-out" style={{ fillOpacity: y.recorded < 6 ? 0.4 : 1 }}><title>{`${y.year}: ${show ? money(y.avg) : ''} a month (${y.recorded} months recorded)`}</title></rect>
+            <text x={x + bw / 2} y={H - 8} textAnchor="middle">{`'${y.year.slice(2)}`}</text>
+            {y.recorded === 0 && <text x={x + bw / 2} y={H - B - 6} textAnchor="middle" className="sub">no records</text>}
+          </g>
+        )
+      })}
+      {windows.filter((w) => w.avg > 0).map((w, i) => (
+        <line key={w.years} x1={L} x2={W - R} y1={Y(w.avg)} y2={Y(w.avg)} className={`aline pline ${WIN[i]}`} strokeDasharray="6 4"><title>{`${w.years}-year average ${show ? money(w.avg) : ''}`}</title></line>
+      ))}
+    </svg>
+    <div className="legend sub">
+      <span className="leg-item"><span className="key out" /> Spending a month in that year (paler: fewer than 6 months recorded)</span>
+      {windows.map((w, i) => <span key={w.years} className="leg-item"><span className={`key-line ${WIN[i]}`} />{w.years}-year average</span>)}
+    </div>
+  </>)
+}
+
 export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show: boolean; userId: string; onDone: () => void }) {
   const [people, setPeople] = useState<Person[]>([])
   useEffect(() => {
@@ -66,11 +103,30 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
     setMsg('Saving…')
     try { await savePlan(userId, f, draft); setMsg('Saved.'); onDone() } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) }
   }
+  const past = useMemo(() => pastSpending(f, fx, today), [f, fx, today])
   const middle = p.table.find((t) => t.sc.key === 'middle') ?? p.table[0]
   const who = p.ages.map((a) => `${a.name} ${a.age}`).join(', ')
 
   return (
     <div className="detail-grid">
+      <section className="sub-panel span-2">
+        <h3>Past spending 過往支出 <span className="sub inline">the best guide to future spending</span></h3>
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>Period</th><th className="n">A month</th><th className="n">A month, without income tax</th><th className="n">Months with records</th><th /></tr></thead>
+          <tbody>{past.windows.map((w) => (
+            <tr key={w.years}>
+              <td>Last {w.years === 1 ? 'year' : `${w.years} years`} <span className="sub inline">{w.from.replace('-', '/')} to {w.to.replace('-', '/')}</span></td>
+              <td className="n"><b>{w.recorded ? M(w.avg) : '-'}</b></td>
+              <td className="n">{w.recorded ? M(w.avgNoTax) : '-'}</td>
+              <td className={`n ${w.recorded < w.months ? 'warn' : ''}`}>{w.recorded} of {w.months}</td>
+              <td className="n">{w.recorded > 0 && <button type="button" className="btn ghost" onClick={() => setDraft({ ...draft, monthly: Math.round(w.avg) })}>Use 採用</button>}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+        {past.byYear.length > 0 && <PastChart byYear={past.byYear} windows={past.windows} show={show} />}
+        <p className="sub">Averages are in the dollars of each year (not adjusted for inflation) and count only months with spending records. One-time items (cars, relocation, building costs) and transfers between own accounts or to family are not spending. "Use" puts the amount into the spending test below; press Save to keep it.</p>
+      </section>
+
       <section className="sub-panel span-2">
         <h3>Retirement plan 退休計劃 <span className="sub inline">today&apos;s dollars; planned until the younger of you ({p.youngest ? `${p.youngest.name}, now ${p.startAge}` : 'age unknown'}) reaches the age shown</span></h3>
         <div className="stats wide fin-stats">
