@@ -1,6 +1,7 @@
 // Finance overview: the issues, decisions and things to watch, worked out from the data on each tab.
 // Each rule returns at most one issue; a stable key lets the owner mark it done or hide it for a while.
 import { mix, netWorth, ownerManager, ownerName, toCad } from './finance'
+import { spendingMonthly } from './finPlan'
 import type { Finance, Fx } from './finance'
 import * as A from './finAnalytics'
 import { yieldCheck } from './finYield'
@@ -27,8 +28,7 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
   const issues: Issue[] = []
   const good: Good[] = []
   const w = netWorth(f, fx)
-  const est = f.settings.spending_estimate
-  const spend = est ? toCad(est.monthly, est.currency, fx) : 0
+  const spend = spendingMonthly(f, fx, today).value
   const m = mix(w, f.settings, spend)
   const inv = A.investments(f, fx)
   const acc = A.accounts(f, fx)
@@ -115,14 +115,6 @@ export function findIssues(f: Finance, fx: Fx, today: string): { issues: Issue[]
   }
 
   // ---------------------------------------------------------------- income and spending
-  if (est && /August 2024|Aug 2024/.test(est.source ?? '')) {
-    issues.push({
-      key: 'fin:spend-estimate', level: 'act', area: 'Income and spending', tab: 'cashflow',
-      title: 'The monthly spending estimate is still the August 2024 budget',
-      detail: (mm) => `The estimate is ${mm(spend)} a month.${cf.recordedMonths ? ` The imported statements alone show about ${mm(cf.avgSpend)} a month over ${cf.recordedMonths} recorded months; accounts not imported yet would add to it.` : ''}`,
-      action: 'Once all household accounts are imported, set the monthly spending on the Net worth tab to the recorded average.',
-    })
-  }
   const review = f.transactions.filter((t) => !t.reviewed).length
   if (review) {
     issues.push({
