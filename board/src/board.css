@@ -450,6 +450,12 @@ a.q-link span { font-size: 0.8em; color: var(--muted); }
 .fin-movers { display: flex; flex-direction: column; gap: 6px; }
 .fin-chart .bar-in { fill: var(--good); }
 .fin-chart .bar-out { fill: var(--crit); opacity: 0.8; }
+.fin-chart .bar-g0, .legend .key.g0 { fill: #5fcf8f; background: #5fcf8f; }
+.fin-chart .bar-g1, .legend .key.g1 { fill: #3a9e6a; background: #3a9e6a; }
+.fin-chart .bar-g2, .legend .key.g2 { fill: #f0b44c; background: #f0b44c; }
+.fin-chart .bar-g3, .legend .key.g3 { fill: #8fb8de; background: #8fb8de; }
+.fin-chart .bar-g4, .legend .key.g4 { fill: #b79ce0; background: #b79ce0; }
+.fin-chart .bar-g5, .legend .key.g5 { fill: #9aa3ad; background: #9aa3ad; }
 .legend { display: flex; align-items: center; gap: 6px; }
 .legend .key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 .legend .key.in { background: var(--good); } .legend .key.out { background: var(--crit); margin-left: 10px; }
