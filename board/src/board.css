@@ -535,3 +535,6 @@ ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
 .sc.quiet { background: #4a5a6e; }
 .sc.future, .sc.before { background: transparent; border: 1px solid var(--line); }
 .legend .sc { width: 12px; }
+
+.seg-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 10px; }
+.seg-toggle .btn.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
