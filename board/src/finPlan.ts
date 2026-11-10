@@ -3,6 +3,7 @@
 // so a spending amount keeps its buying power every year. Settings live in the private database.
 import { addMonth, monthly, monthsBack, netWorth, ownerName, saveFinSettings, toCad } from './finance'
 import type { Finance, FinSettings, Fx } from './finance'
+import { incomeGroup } from './finAnalytics'
 
 export interface Scenario { key: string; label: string; ret: number; infl: number }
 export interface PlanSettings {
@@ -96,7 +97,7 @@ export async function savePlan(userId: string, f: Finance, patch: PlanSettings):
 
 // Past spending a month, for choosing the plan's spending. Averages count only months that have spending
 // records, so gaps in the records do not pull the average down. One-time items and own transfers are not spending.
-export interface PastWindow { years: number; from: string; to: string; recorded: number; months: number; avg: number; avgNoTax: number }
+export interface PastWindow { years: number; from: string; to: string; recorded: number; months: number; avg: number; avgNoTax: number; incomeOther: number }
 // Mortgage and home rent payments. Left out by default: in retirement the home is owned outright,
 // and past mortgages (Hong Kong, the Shuswap project loan) would make past spending look higher than living costs.
 export const HOUSING_PAYMENT = /^Mortgage|Rent paid|Home rent|Housing rent/i
@@ -104,6 +105,10 @@ export function pastSpending(f: Finance, fx: Fx, today: string, withHousing = fa
   const last = addMonth(today.slice(0, 7), -1)
   const months = monthsBack(last, 120)
   const exp = monthly(f, fx, 'expense', months)
+  const inc = monthly(f, fx, 'income', months)
+  // Income that continues in retirement and is not already earned by the money counted in the plan:
+  // rent, Airbnb, pensions and other. Investment income is left out (the plan's return covers it), and so is past work income.
+  const otherIncome = (m: string) => [...(inc.get(m) ?? [])].reduce((t, [l, v]) => t + (['Investment income', 'Work (past)'].includes(incomeGroup(l)) ? 0 : v), 0)
   const total = (m: string, noTax = false) => [...(exp.get(m) ?? [])].reduce((t, [l, v]) => t + ((noTax && /Income Tax/i.test(l)) || (!withHousing && HOUSING_PAYMENT.test(l)) ? 0 : v), 0)
   // A month counts as recorded when it has spending other than the payments being left out.
   const has = (m: string) => [...(exp.get(m) ?? [])].some(([l]) => withHousing || !HOUSING_PAYMENT.test(l))
@@ -111,7 +116,8 @@ export function pastSpending(f: Finance, fx: Fx, today: string, withHousing = fa
     const ms = months.slice(-years * 12)
     const rec = ms.filter(has)
     const sum = rec.reduce((t, m) => t + total(m), 0), sumNoTax = rec.reduce((t, m) => t + total(m, true), 0)
-    return { years, from: ms[0], to: last, recorded: rec.length, months: ms.length, avg: rec.length ? sum / rec.length : 0, avgNoTax: rec.length ? sumNoTax / rec.length : 0 }
+    const incSum = rec.reduce((t, m) => t + otherIncome(m), 0)
+    return { years, from: ms[0], to: last, recorded: rec.length, months: ms.length, avg: rec.length ? sum / rec.length : 0, avgNoTax: rec.length ? sumNoTax / rec.length : 0, incomeOther: rec.length ? incSum / rec.length : 0 }
   })
   const by = new Map<string, { sum: number; recorded: number }>()
   for (const m of months) {

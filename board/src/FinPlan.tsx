@@ -124,7 +124,11 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
   const [draft, setDraft] = useState<PlanSettings>(saved)
   const [msg, setMsg] = useState<string | null>(null)
   const today = vanDate()
-  const fDraft = useMemo(() => ({ ...f, settings: { ...f.settings, retirement: draft } as FinSettings }), [f, draft])
+  // Defaults when nothing is saved: the last 5 years' averages, with mortgage and rent payments left out.
+  const base5 = useMemo(() => pastSpending(f, fx, today, false).windows.find((w) => w.years === 5), [f, fx, today])
+  const defaults = { monthly: base5?.recorded ? Math.round(base5.avg) : undefined, income: base5?.recorded ? Math.round(base5.incomeOther) : undefined }
+  const effective = { ...draft, monthly: draft.monthly ?? defaults.monthly, income: draft.income ?? defaults.income }
+  const fDraft = useMemo(() => ({ ...f, settings: { ...f.settings, retirement: effective } as FinSettings }), [f, draft, defaults.monthly, defaults.income])
   const p = useMemo(() => plan(fDraft, fx, people, today), [fDraft, fx, people, today])
   const M = (v: number) => (show ? money(v) : '••••')
   const scen = draft.scenarios?.length ? draft.scenarios : DEFAULT_SCENARIOS
@@ -199,8 +203,8 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
       <section className="sub-panel span-2">
         <h3>Test a spending amount 試算</h3>
         <form className="hi-edit" onSubmit={save}>
-          <label>Spending a month (CA$)<input inputMode="decimal" value={draft.monthly ?? Math.round(p.monthly)} onChange={(e) => setDraft({ ...draft, monthly: num(e.target.value) })} /></label>
-          <label>Other income a month (CA$)<input inputMode="decimal" placeholder="0" value={draft.income ?? ''} onChange={(e) => setDraft({ ...draft, income: num(e.target.value) })} /></label>
+          <label>Spending a month (CA$)<input inputMode="decimal" value={draft.monthly ?? Math.round(p.monthly)} onChange={(e) => setDraft({ ...draft, monthly: num(e.target.value) })} /><span className="sub">{draft.monthly === undefined ? 'Last 5 years average, mortgage left out' : <button type="button" className="linkish" onClick={() => setDraft({ ...draft, monthly: undefined })}>Back to the 5-year average{defaults.monthly !== undefined ? ` (${M(defaults.monthly)})` : ''}</button>}</span></label>
+          <label>Other income a month (CA$)<input inputMode="decimal" placeholder="0" value={draft.income ?? defaults.income ?? ''} onChange={(e) => setDraft({ ...draft, income: num(e.target.value) })} /><span className="sub">{draft.income === undefined ? 'Last 5 years average of rent, Airbnb and pensions' : <button type="button" className="linkish" onClick={() => setDraft({ ...draft, income: undefined })}>Back to the 5-year average{defaults.income !== undefined ? ` (${M(defaults.income)})` : ''}</button>}</span></label>
           <label>Leave at the end (CA$)<input inputMode="decimal" placeholder="0" value={draft.leave ?? ''} onChange={(e) => setDraft({ ...draft, leave: num(e.target.value) })} /></label>
           {scen.map((s, i) => (
             <fieldset key={s.key} className="fin-scen">

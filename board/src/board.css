@@ -538,3 +538,5 @@ ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
 
 .seg-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 10px; }
 .seg-toggle .btn.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
