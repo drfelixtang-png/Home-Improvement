@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { shortDate } from './format'
 import { vanDate } from './me'
@@ -10,6 +10,7 @@ import {
 import { FinOverview } from './FinOverview'
 import { YieldCheck } from './FinYield'
 import { FinPlan } from './FinPlan'
+import { spendingMonthly } from './finPlan'
 import { FinStatements } from './FinStatements'
 import { BudgetEditor, Bills } from './FinRecent'
 import { AccountsAnalytics, AssessmentChart, PortfolioSnapshots, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
@@ -178,23 +179,29 @@ function IeForm({ f, userId, onDone }: { f: Finance; userId: string; onDone: () 
   )
 }
 
-function SpendForm({ f, userId, fx, onDone }: { f: Finance; userId: string; fx: Fx; onDone: () => void }) {
-  const est = f.settings.spending_estimate
-  const [v, setV] = useState(String(est?.monthly ?? ''))
+function SpendForm({ f, userId, onDone, current, override }: { f: Finance; userId: string; fx: Fx; onDone: () => void; current: number; override: boolean }) {
+  const [v, setV] = useState(String(Math.round(current)))
   const [msg, setMsg] = useState<string | null>(null)
+  useEffect(() => { setV(String(Math.round(current))) }, [current])
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     try {
-      await saveFinSettings(userId, f.settings, { spending_estimate: { monthly: Number(v), currency: 'CAD', source: `Set on ${vanDate()}` } })
+      await saveFinSettings(userId, f.settings, { spending_estimate: { monthly: Number(v), currency: 'CAD', source: `Typed in on ${vanDate()}`, override: true } })
       setMsg('Saved.'); onDone()
+    } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) }
+  }
+  const useAverage = async () => {
+    try {
+      await saveFinSettings(userId, f.settings, { spending_estimate: { ...(f.settings.spending_estimate ?? { monthly: 0, currency: 'CAD' as Cur }), override: false } })
+      setMsg('Using the 5-year average.'); onDone()
     } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) }
   }
   return (
     <form className="fin-inline" onSubmit={submit}>
       <label>Monthly spending CA$ <input inputMode="decimal" value={v} onChange={(e) => setV(e.target.value.replace(/[^0-9.]/g, ''))} /></label>
-      <button type="submit" className="btn ghost">Save</button>
+      <button type="submit" className="btn ghost">Use this amount</button>
+      {override && <button type="button" className="linkish" onClick={useAverage}>Back to the 5-year average</button>}
       {msg && <span className="sub inline" role="status">{msg}</span>}
-      {est && est.currency !== 'CAD' && <span className="sub">{money(toCad(est.monthly, est.currency, fx))}</span>}
     </form>
   )
 }
@@ -559,8 +566,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
   const zh = lang === 'zh'
 
   const w = useMemo(() => netWorth(f, fx), [f, fx])
-  const est = f.settings.spending_estimate
-  const spend = est ? toCad(est.monthly, est.currency, fx) : 0
+  const spendInfo = useMemo(() => spendingMonthly(f, fx, vanDate()), [f, fx])
+  const spend = spendInfo.value
   const m = mix(w, f.settings, spend)
 
   const thisMonth = vanDate().slice(0, 7)
@@ -665,8 +672,8 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
                 ? 'Cash and GICs are below the rule. Top them up from investments before the next large expense.'
                 : 'Cash and GICs are in line with the rule.'}
           </p>
-          <SpendForm f={f} userId={userId} fx={fx} onDone={onReload} />
-          <span className="sub">{est?.source}</span>
+          <SpendForm f={f} userId={userId} fx={fx} onDone={onReload} current={spend} override={spendInfo.override} />
+          <span className="sub">{spendInfo.note}</span>
         </section>
 
         <OverviewAnalytics f={f} fx={fx} show={show} />

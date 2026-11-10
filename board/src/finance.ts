@@ -42,7 +42,7 @@ export interface FinSnapshotRow {
 export interface FinArchive { id: string; name: string; as_of: string | null; data: unknown[][] }
 export interface FinSettings {
   target?: { cash_months: number; safe_months: number; note?: string }
-  spending_estimate?: { monthly: number; currency: Cur; source?: string }
+  spending_estimate?: { monthly: number; currency: Cur; source?: string; override?: boolean }
   saving_target?: { amount: number; currency: Cur; source?: string }
   income_lines?: string[]
   expense_lines?: string[]

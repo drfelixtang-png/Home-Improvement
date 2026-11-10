@@ -219,3 +219,13 @@ export function pastSpending(f: Finance, fx: Fx, today: string, withHousing = fa
   const first = years.findIndex((y) => by.has(y))
   return { windows, byYear: first < 0 ? [] : years.slice(first).map((year) => { const r = by.get(year); return { year, avg: r ? r.sum / r.recorded : 0, recorded: r?.recorded ?? 0 } }) }
 }
+
+// The monthly spending used across the Finance tabs: the last 5 years' average (mortgage and rent left out),
+// unless a figure has been typed in as an override on the Net worth tab.
+export function spendingMonthly(f: Finance, fx: Fx, today: string): { value: number; override: boolean; note: string } {
+  const est = f.settings.spending_estimate
+  if (est?.override) return { value: toCad(est.monthly, est.currency, fx), override: true, note: est.source ?? 'Typed in' }
+  const w5 = pastSpending(f, fx, today, false).windows.find((w) => w.years === 5)
+  if (w5?.recorded) return { value: w5.avg, override: false, note: `Last 5 years average (${w5.recorded} months with records), mortgage and rent left out` }
+  return { value: est ? toCad(est.monthly, est.currency, fx) : 0, override: false, note: est?.source ?? 'No spending records yet' }
+}
