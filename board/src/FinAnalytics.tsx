@@ -169,17 +169,24 @@ export function AccountsAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: b
 }
 
 // ================================================================= income and spending
-function Bars({ series, show, yearly = false }: { series: { m: string; inc: number; exp: number }[]; show: boolean; yearly?: boolean }) {
+function Bars({ series, show, yearly = false }: { series: { m: string; inc: number; exp: number; g?: number[] }[]; show: boolean; yearly?: boolean }) {
   const max = Math.max(1, ...series.flatMap((s) => [s.inc, s.exp]))
   const W = 720, H = 180, B = 22, bw = (W / series.length) * 0.36
+  const scale = (v: number) => (Math.max(0, v) / max) * (H - B - 8)
   return (
-    <svg className="fin-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={yearly ? 'Income and spending by year' : 'Income and spending by month'}>
+    <svg className="fin-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={yearly ? 'Income by type and spending by year' : 'Income by type and spending by month'}>
       {series.map((s, i) => {
         const x = (i + 0.5) * (W / series.length)
-        const h1 = (s.inc / max) * (H - B - 8), h2 = (s.exp / max) * (H - B - 8)
+        const h2 = scale(s.exp)
+        let top = H - B
         return (
           <g key={s.m}>
-            <rect x={x - bw - 1} y={H - B - h1} width={bw} height={h1} className="bar-in"><title>{`${s.m} income ${show ? money(s.inc) : ''}`}</title></rect>
+            {(s.g ?? [s.inc]).map((v, k) => {
+              const h = scale(v)
+              if (h <= 0) return null
+              top -= h
+              return <rect key={k} x={x - bw - 1} y={top} width={bw} height={h} className={s.g ? `bar-g${k}` : 'bar-in'}><title>{`${s.m} ${s.g ? A.INCOME_GROUPS[k] : 'income'} ${show ? money(v) : ''}`}</title></rect>
+            })}
             <rect x={x + 1} y={H - B - h2} width={bw} height={h2} className="bar-out"><title>{`${s.m} spending ${show ? money(s.exp) : ''}`}</title></rect>
             <text x={x} y={H - 6} textAnchor="middle">{yearly ? `'${s.m.slice(2)}` : s.m.slice(2).replace('-', '/')}</text>
           </g>
@@ -228,15 +235,16 @@ export function CashflowAnalytics({ f, fx, show }: { f: Finance; fx: Fx; show: b
         <Ratio value={show ? money(c.spending) : '••••'} label={`Spending (${c.recordedMonths} months recorded)`} />
         <Ratio value={pct(c.savingsRate)} label="Kept after spending (savings rate)" tone={c.savingsRate !== null && c.savingsRate < 0 ? 'crit' : 'good'} />
         <Ratio value={show ? money(c.avgSpend) : '••••'} label="Spending a month, recorded months" />
-        <Ratio value={pct(c.passiveCover)} label="Spending covered by passive income" tone={c.passiveCover !== null && c.passiveCover < 1 ? 'warn' : 'good'} />
+        <Ratio value={pct(c.steadyCover)} label="Spending covered by steady passive income (rent, investments, pensions)" tone={c.steadyCover !== null && c.steadyCover < 1 ? 'warn' : 'good'} />
+        <Ratio value={pct(c.passiveCover)} label="With Airbnb income added" tone={c.passiveCover !== null && c.passiveCover < 1 ? 'warn' : 'good'} />
       </div>
       <Bars series={c.series} show={show} yearly={c.byYear} />
-      <p className="sub legend"><span className="key in" /> Income <span className="key out" /> Spending</p>
-      {c.byYear && <YearTable rows={c.series as YearRow[]} show={show} />}
+      <p className="sub legend">{A.INCOME_GROUPS.map((g, k) => <span key={g}><span className={`key g${k}`} /> {g} </span>)}<span className="key out" /> Spending</p>
+      {c.byYear && <YearTable rows={c.series as unknown as YearRow[]} show={show} />}
       <div className="fin-bd-grid">
         <Breakdown title="Spending by category 支出類別" items={c.byCategory} show={show} />
         <Breakdown title="Fixed or flexible 固定或彈性" items={c.fixedFlex} show={show} note="Fixed costs are hard to cut quickly; flexible ones are where savings usually come from." />
-        <Breakdown title="Where income comes from 收入來源" items={c.incomeTypes} show={show} />
+        <Breakdown title="Where income comes from 收入來源" items={c.incomeTypes} show={show} note="Steady passive income is investment income, long-term rent and pensions. Airbnb income is passive too, but it moves with the seasons, so it is shown on its own." />
         <Breakdown title="Largest payees on statements 最大支出對象" items={c.payees} show={show} max={10} />
       </div>
       <p className="sub">Monthly spending is only as complete as the records: recent years come from the imported bank statements (accounts not imported yet are missing), earlier years from the old spreadsheet. Months without records do not count in the averages.</p>

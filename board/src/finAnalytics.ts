@@ -197,8 +197,19 @@ const CATEGORY: [RegExp, string][] = [
 ]
 export const categoryOf = (line: string) => CATEGORY.find(([re]) => re.test(line))?.[1] ?? 'Other'
 const FIXED = new Set(['Housing', 'Utilities and phone', 'Insurance and health', 'Taxes', 'Education', 'Subscriptions'])
-export const incomeType = (line: string) =>
-  /Investment income|distribution|Airbnb|Rental|^I\(/i.test(line) ? 'Passive (investments and rentals)' : /work|^E\(|^S\(|commission/i.test(line) ? 'Work' : 'Other'
+// Income groups from a retiree's point of view. Order matters: it is the stacking order in the charts.
+export const INCOME_GROUPS = ['Investment income', 'Steady rental', 'Short-term rental (Airbnb)', 'Pensions', 'Work (past)', 'Other'] as const
+export type IncomeGroup = typeof INCOME_GROUPS[number]
+export const incomeGroup = (line: string): IncomeGroup =>
+  /Investment income|interest|dividend/i.test(line) ? 'Investment income'
+    : /Airbnb|distribution/i.test(line) ? 'Short-term rental (Airbnb)'
+    : /^Rental/i.test(line) ? 'Steady rental'
+    : /CPP|OAS|pension/i.test(line) ? 'Pensions'
+    : /work|^E\(|^S\(|^I\(|commission|salary/i.test(line) ? 'Work (past)'
+    : 'Other'
+// Steady passive income: what keeps coming without work and without guest bookings.
+export const STEADY: IncomeGroup[] = ['Investment income', 'Steady rental', 'Pensions']
+export const incomeType = incomeGroup
 
 export function periods(f: Finance): { key: string; label: string }[] {
   const years = [...new Set(f.ie.map((r) => r.month.slice(0, 4)))].sort().reverse()
@@ -224,19 +235,25 @@ export function cashflow(f: Finance, fx: Fx, period: string, today: string) {
   for (const [l, v] of byLineInc) add(itype, incomeType(l), v)
   const income = sumMap(byLineInc), spending = sumMap(byLineExp)
   const recorded = months.filter((m) => exp.has(m))
-  const passive = itype.get('Passive (investments and rentals)') ?? 0
+  const steady = STEADY.reduce((t, g) => t + (itype.get(g) ?? 0), 0)
+  const airbnb = itype.get('Short-term rental (Airbnb)') ?? 0
+  const groupsOf = (ms: string[]) => INCOME_GROUPS.map((g) => ms.reduce((t, mo) => t + [...(inc.get(mo) ?? [])].reduce((u, [l, v]) => u + (incomeGroup(l) === g ? v : 0), 0), 0))
   // Largest payees from the bank statements in the period.
   const payees = new Map<string, number>()
   for (const t of f.transactions) if (t.kind === 'expense' && months.includes(t.posted_on.slice(0, 7))) add(payees, t.description, -toCad(t.amount, t.currency, fx))
   return {
     months, income, spending,
-    series: byYear ? yearSeries(months, inc, exp) : months.map((m) => ({ m, inc: sumMap(inc.get(m)), exp: sumMap(exp.get(m)) })),
+    series: byYear
+      ? yearSeries(months, inc, exp).map((r) => ({ ...r, g: groupsOf(months.filter((mo) => mo.startsWith(r.m))) }))
+      : months.map((m) => ({ m, inc: sumMap(inc.get(m)), exp: sumMap(exp.get(m)), g: groupsOf([m]) })),
     byYear,
     byCategory: slices(cats), fixedFlex: slices(fixed), incomeTypes: slices(itype),
     savingsRate: income > 0 ? (income - spending) / income : null,
     avgSpend: recorded.length ? spending / recorded.length : 0,
     recordedMonths: recorded.length,
-    passiveCover: spending > 0 ? passive / spending : null,
+    passiveCover: spending > 0 ? (steady + airbnb) / spending : null,
+    steadyCover: spending > 0 ? steady / spending : null,
+    steady, airbnb,
     payees: slices(payees).slice(0, 10),
   }
 }
