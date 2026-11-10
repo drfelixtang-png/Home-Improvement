@@ -4,11 +4,11 @@ import type { FormEvent } from 'react'
 import { loadHousehold } from './home'
 import { vanDate } from './me'
 import type { Finance, FinSettings, Fx } from './finance'
-import { HORIZONS, pastSpending, plan, savePlan } from './finPlan'
+import { HORIZONS, MAX_AGE, pastSpending, plan, savePlan } from './finPlan'
 import type { PastWindow, Person, PlanSettings, Scenario } from './finPlan'
 
 const money = (v: number) => `${v < 0 ? '−' : ''}CA$${Math.abs(Math.round(v)).toLocaleString('en-CA')}`
-const SERIES: Record<string, string> = { cautious: 's3', middle: 's1', hopeful: 's2' }
+const SERIES: Record<string, string> = { cautious: 's3', middle: 's1', hopeful: 's2', stress: 's4' }
 
 function Chart({ paths, startAge, show }: { paths: ReturnType<typeof plan>['paths']; startAge: number; show: boolean }) {
   const W = 760, H = 260, L = 64, R = 14, T = 14, B = 28
@@ -17,7 +17,7 @@ function Chart({ paths, startAge, show }: { paths: ReturnType<typeof plan>['path
   const X = (i: number) => L + (i / Math.max(1, n - 1)) * (W - L - R)
   const Y = (v: number) => H - B - (v / max) * (H - B - T)
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => t * max)
-  const ageTicks = [startAge, ...[60, 70, 80, 90, 100].filter((a) => a > startAge + 3)]
+  const ageTicks = [startAge, ...[60, 70, 80, 90, 100, 110, 120, 130].filter((a) => a > startAge + 3)]
   return (<>
     <svg className="fin-chart plan" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Money left each year under each scenario, in today's dollars">
       {ticks.map((t) => (
@@ -28,7 +28,7 @@ function Chart({ paths, startAge, show }: { paths: ReturnType<typeof plan>['path
       ))}
       {ageTicks.map((a) => <text key={a} x={X(a - startAge)} y={H - 8} textAnchor="middle">{a}</text>)}
       {paths.map((p) => (
-        <path key={p.sc.key} d={p.path.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')} className={`aline pline ${SERIES[p.sc.key] ?? 's0'}`} />
+        <path key={p.sc.key} d={p.path.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')} className={`aline pline ${SERIES[p.sc.key] ?? 's0'}`} strokeDasharray={p.sc.key === 'stress' ? '6 4' : undefined} />
       ))}
     </svg>
     <div className="legend sub">
@@ -242,19 +242,34 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
         )}
 
         <div className="tbl-wrap"><table className="tbl">
-          <thead><tr><th>Scenario</th><th>At {M(p.monthly)} a month</th><th className="n">Left at 90</th><th className="n">Left at 100</th></tr></thead>
+          <thead><tr><th>Scenario</th><th>At {M(p.monthly)} a month</th>{HORIZONS.map((h) => <th key={h} className="n">Left at {h}</th>)}</tr></thead>
           <tbody>
-            {p.paths.map((x) => (
+            {[...p.paths, { sc: { key: 'stress', label: `Stress test (stocks fall ${p.stress.drop}% in year one)` }, lastsTo: p.stress.lastsTo, at: p.stress.at }].map((x) => (
               <tr key={x.sc.key}>
                 <td><span className={`key-line ${SERIES[x.sc.key] ?? 's0'}`} /> {x.sc.label}</td>
-                <td className={x.lastsTo !== null && x.lastsTo < 100 ? 'warn' : 'up'}>{x.lastsTo === null ? 'Lasts beyond 100' : `Runs out at about ${x.lastsTo}`}</td>
-                <td className="n">{M(x.at90)}</td>
-                <td className="n">{M(x.at100)}</td>
+                <td className={x.lastsTo !== null && x.lastsTo < 100 ? 'warn' : 'up'}>{x.lastsTo === null ? `Lasts beyond ${MAX_AGE}` : `Runs out at about ${x.lastsTo}`}</td>
+                {x.at.map((a) => <td key={a.h} className="n">{a.h < p.startAge ? '-' : M(a.left)}</td>)}
               </tr>
             ))}
           </tbody>
         </table></div>
-        {p.paths.length > 0 && <Chart paths={p.paths} startAge={p.startAge} show={show} />}
+        {p.paths.length > 0 && <Chart paths={[...p.paths, { sc: { key: 'stress', label: 'Stress test', ret: 0, infl: 0 }, path: p.stress.path, lastsTo: p.stress.lastsTo, at: p.stress.at }]} startAge={p.startAge} show={show} />}
+      </section>
+
+      <section className="sub-panel span-2">
+        <h3>Stress test 壓力測試 <span className="sub inline">a market crash in the first year of retirement</span></h3>
+        <form className="fin-inline" onSubmit={(e) => e.preventDefault()}>
+          <label>Stocks fall in the first year (%) <input inputMode="decimal" value={draft.stress_drop ?? 30} onChange={(e) => setDraft({ ...draft, stress_drop: num(e.target.value) })} /></label>
+        </form>
+        <p className="sub">Stocks are {Math.round(p.stress.stockShare * 100)}% of the money counted. A {p.stress.drop}% fall in stocks, with cash and GICs still earning interest, changes the whole pot by about {p.stress.firstNominal.toFixed(1)}% in the first year. After that the Middle scenario applies. A crash early in retirement does the most harm, because money is being spent while prices are low.</p>
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>Most you can spend a month, to age</th>{HORIZONS.map((h) => <th key={h} className="n">{h}</th>)}</tr></thead>
+          <tbody>
+            <tr><td>Middle, no crash</td>{(middle?.byAge ?? []).map((x) => <td key={x.h} className="n">{M(x.monthly)}</td>)}</tr>
+            <tr><td><span className="key-line s4" /> With the crash</td>{p.stress.byAge.map((x) => <td key={x.h} className="n"><b>{M(x.monthly)}</b></td>)}</tr>
+          </tbody>
+        </table></div>
+        <p className="sub">For reference: Canadian stocks fell about 35% in 2008, the S&amp;P 500 about 37%, and the Hang Seng about 48%.</p>
       </section>
 
       <section className="sub-panel span-2">
@@ -263,7 +278,7 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
           <li>No work income and no government pensions (CPP or OAS). Adding them later will raise every figure.</li>
           <li>The family home is kept and not spent. Other property counts at your share of its value and is assumed to keep pace with inflation; its rent and Airbnb income are counted in &quot;Other income a month&quot;.</li>
           <li>Returns are after fees and roughly after tax, and every figure is in today&apos;s dollars. Spending is the same each year; in practice it is often higher in the early, active years and lower later, apart from health care.</li>
-          <li>Real markets go up and down. A bad few years early on hurts more than the same years later, so treat the Cautious row as the safer guide.</li>
+          <li>Real markets go up and down. A bad few years early on hurts more than the same years later; the Cautious row and the stress test are the safer guides.</li>
           <li>Money counted includes every owner on the board unless you untick them. Felicia&apos;s and Norinian&apos;s money belongs to them; untick it to see a plan on your own and Norina&apos;s money alone.</li>
         </ul>
       </section>

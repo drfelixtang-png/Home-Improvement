@@ -12,13 +12,15 @@ export interface PlanSettings {
   leave?: number              // money to leave at the end, today's dollars
   exclude?: string[]          // owners (or 'property') left out of the money to live on
   scenarios?: Scenario[]
+  stress_drop?: number        // stress test: % fall in stocks in the first year
 }
 export const DEFAULT_SCENARIOS: Scenario[] = [
   { key: 'cautious', label: 'Cautious', ret: 4.0, infl: 3.0 },
   { key: 'middle', label: 'Middle', ret: 5.0, infl: 2.5 },
   { key: 'hopeful', label: 'Hopeful', ret: 6.0, infl: 2.0 },
 ]
-export const HORIZONS = [90, 95, 100]
+export const HORIZONS = [90, 95, 100, 110, 120, 130]
+export const MAX_AGE = 130
 
 export interface Person { key: string; name: string; born: string }
 
@@ -48,6 +50,26 @@ export function maxSpendYear(P: number, years: number, r: number, income: number
   const usable = P - leave * v
   if (Math.abs(r) < 1e-9) return income + usable / years
   return income + (usable * r) / ((1 - v) * (1 + r))
+}
+
+// Year-by-year balance with a different real return each year (rates[i] for year i, the last rate repeating).
+export function projectRates(P: number, spendYear: number, rates: number[], income: number, years: number): number[] {
+  const out = [P]
+  let b = P
+  for (let i = 0; i < years; i++) {
+    b = (b - spendYear + income) * (1 + rates[Math.min(i, rates.length - 1)])
+    out.push(Math.max(0, b))
+    if (b <= 0) { for (let j = i + 1; j < years; j++) out.push(0); break }
+  }
+  return out
+}
+// Largest steady yearly spending that still leaves `leave` after `years` years with the given yearly returns (found by halving).
+export function maxSpendRates(P: number, years: number, rates: number[], income: number, leave: number): number {
+  if (years <= 0) return 0
+  const end = (spend: number) => { let b = P; for (let i = 0; i < years; i++) b = (b - spend + income) * (1 + rates[Math.min(i, rates.length - 1)]); return b }
+  let lo = 0, hi = Math.max(1, P + income * years)
+  for (let k = 0; k < 80; k++) { const mid = (lo + hi) / 2; if (end(mid) >= leave) lo = mid; else hi = mid }
+  return lo
 }
 
 // Year-by-year balance with a steady spending amount; stops when the money runs out.
@@ -130,14 +152,32 @@ export function plan(f: Finance, fx: Fx, people: Person[], today: string) {
     r: realRate(sc),
     byAge: HORIZONS.map((h) => ({ h, monthly: maxSpendYear(p.total, h - startAge, realRate(sc), income * 12, leave) / 12 })),
   }))
-  const years = 100 - startAge
+  const years = MAX_AGE - startAge
+  const atAges = (path: number[]) => HORIZONS.map((h) => ({ h, left: path[Math.max(0, h - startAge)] ?? 0 }))
   const paths = scenarios.map((sc) => {
     const r = realRate(sc)
     const path = project(p.total, monthly * 12, r, income * 12, years)
     const runOut = path.findIndex((v, i) => i > 0 && v <= 0)
-    return { sc, path, lastsTo: runOut === -1 ? null : startAge + runOut, at90: path[Math.max(0, 90 - startAge)] ?? 0, at100: path[years] ?? 0 }
+    return { sc, path, lastsTo: runOut === -1 ? null : startAge + runOut, at: atAges(path) }
   })
-  return { s, scenarios, suggestion, monthly, income, leave, exclude, pot: p, ages, youngest, startAge, table, paths }
+  // Stress test: stocks fall in the first year, cash and GICs still earn the GIC rate, property holds its value;
+  // after that the Middle scenario. Everything after inflation.
+  const mid = scenarios.find((x) => x.key === 'middle') ?? scenarios[0]
+  const drop = s.stress_drop ?? 30
+  const m = mixOf(f, fx, exclude)
+  const mTotal = Math.max(1, m.stocks + m.safe + m.property)
+  const safeRate = (f.settings as FinSettings & { rate_benchmarks?: { CAD?: { gic1y?: number } } }).rate_benchmarks?.CAD?.gic1y ?? 3.5
+  const firstNominal = (Math.max(0, m.stocks) * -drop + Math.max(0, m.safe) * safeRate + Math.max(0, m.property) * (mid?.infl ?? 2.5)) / mTotal
+  const firstReal = (1 + firstNominal / 100) / (1 + (mid?.infl ?? 2.5) / 100) - 1
+  const stressRates = [firstReal, mid ? realRate(mid) : 0.02]
+  const stressPath = projectRates(p.total, monthly * 12, stressRates, income * 12, years)
+  const sRun = stressPath.findIndex((v, i) => i > 0 && v <= 0)
+  const stress = {
+    drop, firstNominal, stockShare: Math.max(0, m.stocks) / mTotal, path: stressPath,
+    lastsTo: sRun === -1 ? null : startAge + sRun, at: atAges(stressPath),
+    byAge: HORIZONS.map((h) => ({ h, monthly: maxSpendRates(p.total, h - startAge, stressRates, income * 12, leave) / 12 })),
+  }
+  return { s, scenarios, suggestion, monthly, income, leave, exclude, pot: p, ages, youngest, startAge, table, paths, stress }
 }
 
 export async function savePlan(userId: string, f: Finance, patch: PlanSettings): Promise<void> {

@@ -542,3 +542,4 @@ ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
 .linkish { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
 
 .fin-why { margin: 10px 0; } .fin-why summary { cursor: pointer; color: var(--muted, #9aa3ad); }
+.fin-chart .pline.s4 { stroke: #b79ce0; }
