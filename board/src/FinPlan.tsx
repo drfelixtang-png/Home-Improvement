@@ -75,6 +75,43 @@ function PastChart({ byYear, windows, show }: { byYear: { year: string; avg: num
   </>)
 }
 
+type MarketRow = { place: string; measure: string; as_of: string; y1: number; y3: number; y5: number; y10: number; source: string; url?: string; inflation?: boolean; approx?: string[] }
+type MarketRef = { updated?: string; note?: string; rows?: MarketRow[] }
+const PERIODS = ['y1', 'y3', 'y5', 'y10'] as const
+const pctTxt = (v: number) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}%`
+function MarketTable({ data: m, scen }: { data?: MarketRef; scen: Scenario[] }) {
+  const rows = m?.rows ?? []
+  if (!rows.length) return null
+  const places = [...new Set(rows.map((r) => r.place))]
+  return (
+    <section className="sub-panel span-2">
+      <h3>Past returns and inflation 過往回報及通脹 <span className="sub inline">a yearly average for each period, for reference</span></h3>
+      <div className="tbl-wrap"><table className="tbl">
+        <thead><tr><th>Measure</th><th className="n">1 year</th><th className="n">3 years</th><th className="n">5 years</th><th className="n">10 years</th><th>As of</th></tr></thead>
+        <tbody>{places.flatMap((pl) => {
+          const own = rows.filter((r) => r.place === pl)
+          const stock = own.find((r) => !r.inflation), infl = own.find((r) => r.inflation)
+          const out = [<tr key={pl} className="group"><td colSpan={6}><b>{pl}</b></td></tr>]
+          for (const r of own) out.push(
+            <tr key={pl + r.measure}>
+              <td>{r.measure}<span className="sub">{r.url ? <a href={r.url} target="_blank" rel="noreferrer">{r.source}</a> : r.source}</span></td>
+              {PERIODS.map((k) => <td key={k} className={`n ${!r.inflation ? (r[k] < 0 ? 'warn' : 'up') : ''}`}>{r.approx?.includes(k) ? 'about ' : ''}{pctTxt(r[k])}</td>)}
+              <td className="sub">{r.as_of}</td>
+            </tr>)
+          if (stock && infl) out.push(
+            <tr key={pl + 'real'}>
+              <td><i>Stocks after inflation</i></td>
+              {PERIODS.map((k) => <td key={k} className="n"><i>{pctTxt(((1 + stock[k] / 100) / (1 + infl[k] / 100) - 1) * 100)}</i></td>)}
+              <td />
+            </tr>)
+          return out
+        })}</tbody>
+      </table></div>
+      <p className="sub">Your plan scenarios for comparison: {scen.map((s) => `${s.label} ${s.ret}% return, ${s.infl}% inflation`).join('; ')}. Stock markets swing widely from year to year; the 10-year figures are the steadiest guide, and a mix of stocks, bonds and GICs earns less than stocks alone but falls less in bad years. {m?.note} Updated {m?.updated}.</p>
+    </section>
+  )
+}
+
 export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; show: boolean; userId: string; onDone: () => void }) {
   const [people, setPeople] = useState<Person[]>([])
   useEffect(() => {
@@ -132,6 +169,8 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
         {past.byYear.length > 0 && <PastChart byYear={past.byYear} windows={past.windows} show={show} />}
         <p className="sub">Averages are in the dollars of each year (not adjusted for inflation) and count only months with spending records. One-time items (cars, relocation, building costs) and transfers between own accounts or to family are not spending. {withHousing ? 'Mortgage and rent payments are included.' : 'Mortgage and rent payments are left out, since the home will be owned outright in retirement; past mortgages (Hong Kong, the Shuswap project loan) would otherwise inflate the figures.'} "Use" puts the amount into the spending test below; press Save to keep it.</p>
       </section>
+
+      <MarketTable data={(f.settings as FinSettings & { market_reference?: MarketRef }).market_reference} scen={scen} />
 
       <section className="sub-panel span-2">
         <h3>Retirement plan 退休計劃 <span className="sub inline">today&apos;s dollars; planned until the younger of you ({p.youngest ? `${p.youngest.name}, now ${p.startAge}` : 'age unknown'}) reaches the age shown</span></h3>
