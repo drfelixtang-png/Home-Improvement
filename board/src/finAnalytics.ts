@@ -201,11 +201,11 @@ const FIXED = new Set(['Housing', 'Utilities and phone', 'Insurance and health',
 export const INCOME_GROUPS = ['Investment income', 'Steady rental', 'Short-term rental (Airbnb)', 'Pensions', 'Work (past)', 'Other'] as const
 export type IncomeGroup = typeof INCOME_GROUPS[number]
 export const incomeGroup = (line: string): IncomeGroup =>
-  /Investment income|interest|dividend/i.test(line) ? 'Investment income'
+  /Investment income|interest|dividend|^I\(/i.test(line) ? 'Investment income'
     : /Airbnb|distribution/i.test(line) ? 'Short-term rental (Airbnb)'
     : /^Rental/i.test(line) ? 'Steady rental'
     : /CPP|OAS|pension/i.test(line) ? 'Pensions'
-    : /work|^E\(|^S\(|^I\(|commission|salary/i.test(line) ? 'Work (past)'
+    : /work|^E\(|^S\(|commission|salary/i.test(line) ? 'Work (past)'
     : 'Other'
 // Steady passive income: what keeps coming without work and without guest bookings.
 export const STEADY: IncomeGroup[] = ['Investment income', 'Steady rental', 'Pensions']
