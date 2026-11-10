@@ -540,3 +540,5 @@ ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
 .seg-toggle .btn.on { background: var(--accent); color: var(--bg); border-color: var(--accent); }
 
 .linkish { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
+
+.fin-why { margin: 10px 0; } .fin-why summary { cursor: pointer; color: var(--muted, #9aa3ad); }

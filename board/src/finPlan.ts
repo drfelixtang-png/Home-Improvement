@@ -1,7 +1,7 @@
 // Retirement plan: how much can be spent each month so the money lasts to a chosen age.
 // Everything is in today's dollars: returns are turned into "real" returns after inflation,
 // so a spending amount keeps its buying power every year. Settings live in the private database.
-import { addMonth, monthly, monthsBack, netWorth, ownerName, saveFinSettings, toCad } from './finance'
+import { accountAmount, addMonth, latestBalances, monthly, monthsBack, netWorth, ownerName, saveFinSettings, toCad } from './finance'
 import type { Finance, FinSettings, Fx } from './finance'
 import { incomeGroup } from './finAnalytics'
 
@@ -62,9 +62,59 @@ export function project(P: number, spendYear: number, r: number, income: number,
   return out
 }
 
+
+// ---------------------------------------------------------------- suggested scenarios
+// Starting values for Cautious, Middle and Hopeful, worked out from the past returns and inflation table
+// (an equal one-third blend of Canada, the United States and Hong Kong) and the mix of the money counted:
+// stocks earn the blended stock return, cash and GICs the current 1-year GIC rate, and other property
+// keeps pace with inflation (its rent is counted separately as other income).
+type RefRow = { place: string; inflation?: boolean; y1: number; y3: number; y5: number; y10: number }
+const WINDOWS = ['y1', 'y3', 'y5', 'y10'] as const
+export interface Suggestion { scenarios: Scenario[]; stockBlend: Record<string, number>; inflBlend: Record<string, number>; shares: { stocks: number; safe: number; property: number }; safeRate: number }
+export function mixOf(f: Finance, fx: Fx, exclude: string[]) {
+  const latest = latestBalances(f)
+  let stocks = 0, safe = 0
+  for (const a of f.accounts.filter((x) => x.active && !exclude.includes(x.owner))) {
+    const amt = accountAmount(f, a.id, latest, fx)
+    if (amt === null) continue
+    const v = toCad(amt, a.currency, fx)
+    if (a.kind === 'investment') stocks += v; else safe += v
+  }
+  const w = netWorth(f, fx)
+  const property = exclude.includes('property') ? 0 : w.properties.filter((x) => !x.p.details?.primary_home).reduce((t, x) => t + x.equity, 0)
+  return { stocks, safe, property }
+}
+export function suggest(f: Finance, fx: Fx, exclude: string[]): Suggestion | null {
+  const rows = ((f.settings as FinSettings & { market_reference?: { rows?: RefRow[] } }).market_reference?.rows ?? [])
+  const stockRows = rows.filter((r) => !r.inflation), inflRows = rows.filter((r) => r.inflation)
+  if (!stockRows.length || !inflRows.length) return null
+  const avg = (rs: RefRow[], k: typeof WINDOWS[number]) => rs.reduce((t, r) => t + r[k], 0) / rs.length
+  const stockBlend = Object.fromEntries(WINDOWS.map((k) => [k, avg(stockRows, k)])) as Record<string, number>
+  const inflBlend = Object.fromEntries(WINDOWS.map((k) => [k, avg(inflRows, k)])) as Record<string, number>
+  const m = mixOf(f, fx, exclude)
+  const total = Math.max(1, m.stocks + m.safe + m.property)
+  const shares = { stocks: Math.max(0, m.stocks) / total, safe: Math.max(0, m.safe) / total, property: Math.max(0, m.property) / total }
+  const safeRate = (f.settings as FinSettings & { rate_benchmarks?: { CAD?: { gic1y?: number } } }).rate_benchmarks?.CAD?.gic1y ?? 3.5
+  const ret = (stock: number, infl: number) => shares.stocks * stock + shares.safe * safeRate + shares.property * infl
+  const r1 = (v: number) => Math.round(v * 10) / 10
+  const stocksAll = WINDOWS.map((k) => stockBlend[k]), inflAll = WINDOWS.map((k) => inflBlend[k])
+  const cautious = { stock: Math.min(...stocksAll), infl: Math.max(...inflAll) }
+  const middle = { stock: stockBlend.y10, infl: inflBlend.y10 }
+  const hopeful = { stock: (stockBlend.y5 + stockBlend.y10) / 2, infl: Math.min(...inflAll) }
+  return {
+    stockBlend, inflBlend, shares, safeRate,
+    scenarios: [
+      { key: 'cautious', label: 'Cautious', ret: r1(ret(cautious.stock, cautious.infl)), infl: r1(cautious.infl) },
+      { key: 'middle', label: 'Middle (most likely)', ret: r1(ret(middle.stock, middle.infl)), infl: r1(middle.infl) },
+      { key: 'hopeful', label: 'Hopeful', ret: r1(ret(hopeful.stock, hopeful.infl)), infl: r1(hopeful.infl) },
+    ],
+  }
+}
+
 export function plan(f: Finance, fx: Fx, people: Person[], today: string) {
   const s = ((f.settings as FinSettings & { retirement?: PlanSettings }).retirement ?? {})
-  const scenarios = s.scenarios?.length ? s.scenarios : DEFAULT_SCENARIOS
+  const suggestion = suggest(f, fx, s.exclude ?? [])
+  const scenarios = s.scenarios?.length ? s.scenarios : suggestion?.scenarios ?? DEFAULT_SCENARIOS
   const est = f.settings.spending_estimate
   const monthly = s.monthly ?? (est ? toCad(est.monthly, est.currency, fx) : 5000)
   const income = s.income ?? 0
@@ -87,7 +137,7 @@ export function plan(f: Finance, fx: Fx, people: Person[], today: string) {
     const runOut = path.findIndex((v, i) => i > 0 && v <= 0)
     return { sc, path, lastsTo: runOut === -1 ? null : startAge + runOut, at90: path[Math.max(0, 90 - startAge)] ?? 0, at100: path[years] ?? 0 }
   })
-  return { s, scenarios, monthly, income, leave, exclude, pot: p, ages, youngest, startAge, table, paths }
+  return { s, scenarios, suggestion, monthly, income, leave, exclude, pot: p, ages, youngest, startAge, table, paths }
 }
 
 export async function savePlan(userId: string, f: Finance, patch: PlanSettings): Promise<void> {

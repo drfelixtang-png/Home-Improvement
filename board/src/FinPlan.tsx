@@ -4,7 +4,7 @@ import type { FormEvent } from 'react'
 import { loadHousehold } from './home'
 import { vanDate } from './me'
 import type { Finance, FinSettings, Fx } from './finance'
-import { DEFAULT_SCENARIOS, HORIZONS, pastSpending, plan, savePlan } from './finPlan'
+import { HORIZONS, pastSpending, plan, savePlan } from './finPlan'
 import type { PastWindow, Person, PlanSettings, Scenario } from './finPlan'
 
 const money = (v: number) => `${v < 0 ? '−' : ''}CA$${Math.abs(Math.round(v)).toLocaleString('en-CA')}`
@@ -131,7 +131,7 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
   const fDraft = useMemo(() => ({ ...f, settings: { ...f.settings, retirement: effective } as FinSettings }), [f, draft, defaults.monthly, defaults.income])
   const p = useMemo(() => plan(fDraft, fx, people, today), [fDraft, fx, people, today])
   const M = (v: number) => (show ? money(v) : '••••')
-  const scen = draft.scenarios?.length ? draft.scenarios : DEFAULT_SCENARIOS
+  const scen = draft.scenarios?.length ? draft.scenarios : p.scenarios
   const setScen = (i: number, patch: Partial<Scenario>) => setDraft({ ...draft, scenarios: scen.map((s, j) => (j === i ? { ...s, ...patch } : s)) })
   const num = (v: string) => (v === '' ? undefined : Number(v.replace(/[^0-9.]/g, '')))
   const toggle = (k: string) => {
@@ -221,6 +221,25 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
           </fieldset>
           <div className="form-row"><button type="submit" className="btn">Save as my plan 儲存</button>{msg && <span className="sub" role="status">{msg}</span>}</div>
         </form>
+        {p.suggestion && (
+          <details className="fin-why">
+            <summary>How the starting values were worked out {draft.scenarios?.length ? <button type="button" className="linkish" onClick={(e) => { e.preventDefault(); setDraft({ ...draft, scenarios: undefined }) }}>Use the worked-out values again</button> : <span className="sub inline">(in use)</span>}</summary>
+            <p className="sub">An equal one-third blend of Canada, the United States and Hong Kong from the table above, applied to the mix of the money counted: stocks {Math.round(p.suggestion.shares.stocks * 100)}%, cash and GICs {Math.round(p.suggestion.shares.safe * 100)}% (earning the current 1-year GIC rate of {p.suggestion.safeRate.toFixed(2)}%), other property {Math.round(p.suggestion.shares.property * 100)}% (keeping pace with inflation).</p>
+            <div className="tbl-wrap"><table className="tbl">
+              <thead><tr><th>Blend of the three places</th><th className="n">1 year</th><th className="n">3 years</th><th className="n">5 years</th><th className="n">10 years</th></tr></thead>
+              <tbody>
+                <tr><td>Stock return</td>{['y1', 'y3', 'y5', 'y10'].map((k) => <td key={k} className="n">{p.suggestion!.stockBlend[k].toFixed(1)}%</td>)}</tr>
+                <tr><td>Inflation</td>{['y1', 'y3', 'y5', 'y10'].map((k) => <td key={k} className="n">{p.suggestion!.inflBlend[k].toFixed(1)}%</td>)}</tr>
+              </tbody>
+            </table></div>
+            <ul className="plain sub">
+              <li><b>Middle (most likely):</b> the 10-year blend, the steadiest guide.</li>
+              <li><b>Cautious:</b> the weakest stock return of the four periods, with the highest inflation.</li>
+              <li><b>Hopeful:</b> the average of the 5 and 10-year stock returns, with the lowest inflation.</li>
+              <li>The Hong Kong stock figures leave out dividends, which makes the blend slightly cautious.</li>
+            </ul>
+          </details>
+        )}
 
         <div className="tbl-wrap"><table className="tbl">
           <thead><tr><th>Scenario</th><th>At {M(p.monthly)} a month</th><th className="n">Left at 90</th><th className="n">Left at 100</th></tr></thead>
@@ -242,7 +261,7 @@ export function FinPlan({ f, fx, show, userId, onDone }: { f: Finance; fx: Fx; s
         <h3>What this assumes 假設</h3>
         <ul className="plain">
           <li>No work income and no government pensions (CPP or OAS). Adding them later will raise every figure.</li>
-          <li>The family home is kept and not spent. Other property counts at your share of its value; its rent is treated as part of its return, so do not add it again as income.</li>
+          <li>The family home is kept and not spent. Other property counts at your share of its value and is assumed to keep pace with inflation; its rent and Airbnb income are counted in &quot;Other income a month&quot;.</li>
           <li>Returns are after fees and roughly after tax, and every figure is in today&apos;s dollars. Spending is the same each year; in practice it is often higher in the early, active years and lower later, apart from health care.</li>
           <li>Real markets go up and down. A bad few years early on hurts more than the same years later, so treat the Cautious row as the safer guide.</li>
           <li>Money counted includes every owner on the board unless you untick them. Felicia&apos;s and Norinian&apos;s money belongs to them; untick it to see a plan on your own and Norina&apos;s money alone.</li>
