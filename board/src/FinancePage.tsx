@@ -346,11 +346,14 @@ function categories(f: Finance): { value: string; label: string }[] {
   ]
 }
 
-function ReviewRow({ t, f, show, cats, onDone }: { t: FinTransaction; f: Finance; show: boolean; cats: { value: string; label: string }[]; onDone: () => void }) {
-  const [v, setV] = useState(`${t.kind}|${t.line}`)
-  const [all, setAll] = useState(true)
+function TxRow({ t, f, show, cats, onDone, mode }: { t: FinTransaction; f: Finance; show: boolean; cats: { value: string; label: string }[]; onDone: () => void; mode: 'review' | 'edit' }) {
+  const start = `${t.kind}|${t.line}`
+  const [v, setV] = useState(start)
+  const [all, setAll] = useState(mode === 'review')
   const [msg, setMsg] = useState<string | null>(null)
-  const similar = f.transactions.filter((x) => !x.reviewed && x.id !== t.id && x.description === t.description)
+  // In the review list, "similar" means other unreviewed rows with the same description; when editing any entry, all of them.
+  const similar = f.transactions.filter((x) => x.id !== t.id && x.description === t.description && (mode === 'edit' || !x.reviewed))
+  const changed = v !== start || !t.reviewed
   const save = async () => {
     const [kind, ...rest] = v.split('|')
     setMsg('Saving…')
@@ -360,81 +363,83 @@ function ReviewRow({ t, f, show, cats, onDone }: { t: FinTransaction; f: Finance
     } catch (e) { setMsg(`Could not save: ${(e as Error).message}`) }
   }
   return (
-    <tr>
+    <tr className={t.kind === 'transfer' && mode === 'edit' ? 'muted' : ''}>
       <td className="mono">{t.posted_on}</td>
-      <td>{t.description}<span className="sub">{t.account}</span></td>
+      <td>{t.description}<span className="sub">{t.account}{!t.reviewed && mode === 'edit' && ' · to review'}</span></td>
       <td className={`n ${t.amount < 0 ? 'dn' : 'up'}`}>{show ? orig(t.amount, t.currency) : '••••'}</td>
       <td>
         <select className="fin-cat" value={v} onChange={(e) => setV(e.target.value)} aria-label={`Category for ${t.description} on ${t.posted_on}`}>
           {!cats.some((c) => c.value === v) && <option value={v}>{v.replace('|', ': ')}</option>}
           {cats.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select>
-        {similar.length > 0 && <label className="sub fin-similar"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Also the {similar.length} other &quot;{t.description}&quot;</label>}
+        {similar.length > 0 && changed && <label className="sub fin-similar"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Also the {similar.length} other &quot;{t.description}&quot;</label>}
         {msg && <span className="sub" role="status">{msg}</span>}
       </td>
-      <td><button type="button" className="act" onClick={save}>Confirm</button></td>
+      <td>{changed && <button type="button" className="act" onClick={save}>{mode === 'review' && v === start ? 'Confirm' : 'Save'}</button>}</td>
     </tr>
   )
 }
 
+const PAGE = 100
+
 function Statements({ f, fx, show, onDone }: { f: Finance; fx: Fx; show: boolean; onDone: () => void }) {
   const tx = f.transactions
   const months = [...new Set(tx.map((t) => t.posted_on.slice(0, 7)))].sort().reverse()
-  const [month, setMonth] = useState(months[0] ?? '')
-  const [view, setView] = useState<'review' | 'month' | 'capital'>('review')
+  const accounts = [...new Set(tx.map((t) => t.account))].sort()
+  const [view, setView] = useState<'review' | 'all' | 'capital'>(() => (tx.some((t) => !t.reviewed) ? 'review' : 'all'))
+  const [account, setAccount] = useState('')
+  const [month, setMonth] = useState('')
+  const [kind, setKind] = useState('')
+  const [q, setQ] = useState('')
+  const [limit, setLimit] = useState(PAGE)
   const cats = useMemo(() => categories(f), [f])
   if (!tx.length) return null
   const review = tx.filter((t) => !t.reviewed).sort((a, b) => b.posted_on.localeCompare(a.posted_on))
   const capital = tx.filter((t) => t.kind === 'capital').sort((a, b) => b.posted_on.localeCompare(a.posted_on))
-  const inMonth = tx.filter((t) => t.posted_on.startsWith(month)).sort((a, b) => a.posted_on.localeCompare(b.posted_on))
-  const sum = (k: TxKind) => inMonth.filter((t) => t.kind === k).reduce((s, t) => s + toCad(t.amount, t.currency, fx), 0)
+  const words = q.trim().toLowerCase()
+  const shown = tx.filter((t) => (!account || t.account === account) && (!month || t.posted_on.startsWith(month)) && (!kind || t.kind === kind)
+    && (!words || `${t.description} ${t.line} ${t.amount}`.toLowerCase().includes(words)))
+    .sort((a, b) => b.posted_on.localeCompare(a.posted_on) || (a.seq ?? 0) - (b.seq ?? 0))
+  const sum = (k: TxKind) => shown.filter((t) => t.kind === k).reduce((s, t) => s + toCad(t.amount, t.currency, fx), 0)
   const M = (v: number) => (show ? money(v) : '••••')
+  const reset = (fn: () => void) => { fn(); setLimit(PAGE) }
+  const head = <thead><tr><th>Date</th><th>Description</th><th className="n">Amount</th><th>Category</th><th /></tr></thead>
   return (
     <section className="sub-panel span-2">
       <h3>Bank statements 銀行月結單 <span className="sub inline">{tx.length} transactions, {months[months.length - 1]} to {months[0]}</span></h3>
       <div className="fin-view" role="group" aria-label="Statement view">
+        <button type="button" className={view === 'all' ? 'on' : ''} aria-pressed={view === 'all'} onClick={() => setView('all')}>All entries</button>
         <button type="button" className={view === 'review' ? 'on' : ''} aria-pressed={view === 'review'} onClick={() => setView('review')}>To review ({review.length})</button>
-        <button type="button" className={view === 'month' ? 'on' : ''} aria-pressed={view === 'month'} onClick={() => setView('month')}>By month</button>
         <button type="button" className={view === 'capital' ? 'on' : ''} aria-pressed={view === 'capital'} onClick={() => setView('capital')}>Large one-time moves ({capital.length})</button>
       </div>
       {view === 'review' && (review.length ? (<>
         <p className="sub">These were sorted by a best guess and already count in the monthly figures. Pick the right category and press Confirm. Money moved between your own accounts, or sent for someone else, should be &quot;Own transfer&quot; so it is not counted as spending.</p>
-        <div className="tbl-wrap"><table className="tbl">
-          <thead><tr><th>Date</th><th>Description</th><th className="n">Amount</th><th>Category</th><th /></tr></thead>
-          <tbody>{review.map((t) => <ReviewRow key={t.id} t={t} f={f} show={show} cats={cats} onDone={onDone} />)}</tbody>
+        <div className="tbl-wrap"><table className="tbl">{head}
+          <tbody>{review.map((t) => <TxRow key={t.id} mode="review" t={t} f={f} show={show} cats={cats} onDone={onDone} />)}</tbody>
         </table></div>
-      </>) : <p className="all-clear">Everything has been reviewed.</p>)}
-      {view === 'month' && (<>
-        <label className="fin-date">Month <select className="fin-year" value={month} onChange={(e) => setMonth(e.target.value)}>{months.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+      </>) : <p className="all-clear">Everything has been reviewed. Use All entries to check or change any entry.</p>)}
+      {view === 'all' && (<>
+        <p className="sub">Open any account, month or category and change the category of any entry. Pick a new category, then press Save. Tick the box to change every entry with the same description at once.</p>
+        <div className="fin-filters">
+          <label>Account <select className="fin-year" value={account} onChange={(e) => reset(() => setAccount(e.target.value))}><option value="">All accounts</option>{accounts.map((a) => <option key={a} value={a}>{a}</option>)}</select></label>
+          <label>Month <select className="fin-year" value={month} onChange={(e) => reset(() => setMonth(e.target.value))}><option value="">All months</option>{months.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+          <label>Type <select className="fin-year" value={kind} onChange={(e) => reset(() => setKind(e.target.value))}><option value="">All types</option>{(Object.keys(KIND_LABEL) as TxKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></label>
+          <label>Search <input className="fin-year" type="search" value={q} placeholder="Description, category or amount" onChange={(e) => reset(() => setQ(e.target.value))} /></label>
+        </div>
         <div className="stats wide fin-stats">
+          <div className="stat"><b>{shown.length}</b><span>Entries</span></div>
           <div className="stat"><b>{M(sum('income'))}</b><span>Income</span></div>
           <div className="stat"><b>{M(-sum('expense'))}</b><span>Spending</span></div>
-          <div className="stat"><b>{inMonth.filter((t) => t.kind === 'transfer').length}</b><span>Own transfers, not counted</span></div>
         </div>
-        <div className="tbl-wrap"><table className="tbl">
-          <thead><tr><th>Date</th><th>Description</th><th>Category</th><th className="n">Amount</th></tr></thead>
-          <tbody>{inMonth.map((t) => (
-            <tr key={t.id} className={t.kind === 'transfer' ? 'muted' : ''}>
-              <td className="mono">{t.posted_on.slice(5)}</td>
-              <td>{t.description}<span className="sub">{t.account}</span></td>
-              <td>{KIND_LABEL[t.kind]}<span className="sub">{t.line}{!t.reviewed && ' · to review'}</span></td>
-              <td className={`n ${t.amount < 0 ? 'dn' : 'up'}`}>{show ? orig(t.amount, t.currency) : '••••'}</td>
-            </tr>
-          ))}</tbody>
-        </table></div>
+        {shown.length ? (<div className="tbl-wrap"><table className="tbl">{head}
+          <tbody>{shown.slice(0, limit).map((t) => <TxRow key={`${t.id}|${t.kind}|${t.line}|${t.reviewed}`} mode="edit" t={t} f={f} show={show} cats={cats} onDone={onDone} />)}</tbody>
+        </table></div>) : <p className="sub">No entries match.</p>}
+        {shown.length > limit && <button type="button" className="btn" onClick={() => setLimit(limit + PAGE)}>Show {Math.min(PAGE, shown.length - limit)} more of {shown.length - limit}</button>}
       </>)}
       {view === 'capital' && (<>
-        <p className="sub">Large movements that are not everyday income or spending, such as a mortgage payout or the proceeds of a property sale. They are kept out of the monthly figures.</p>
-        <div className="tbl-wrap"><table className="tbl">
-          <thead><tr><th>Date</th><th>Description</th><th>What it is</th><th className="n">Amount</th></tr></thead>
-          <tbody>{capital.map((t) => (
-            <tr key={t.id}>
-              <td className="mono">{t.posted_on}</td>
-              <td>{t.description}<span className="sub">{t.account}</span></td>
-              <td>{t.line}{!t.reviewed && <span className="sub">to review</span>}</td>
-              <td className={`n ${t.amount < 0 ? 'dn' : 'up'}`}>{show ? orig(t.amount, t.currency) : '••••'}</td>
-            </tr>
-          ))}</tbody>
+        <p className="sub">Large movements that are not everyday income or spending, such as a mortgage payout or the proceeds of a property sale. They are kept out of the monthly figures. Change any of them here too.</p>
+        <div className="tbl-wrap"><table className="tbl">{head}
+          <tbody>{capital.map((t) => <TxRow key={`${t.id}|${t.kind}|${t.line}|${t.reviewed}`} mode="edit" t={t} f={f} show={show} cats={cats} onDone={onDone} />)}</tbody>
         </table></div>
       </>)}
       <p className="sub">Only the accounts imported so far. Card payments and transfers between your own accounts are left out so nothing is counted twice; when a card has no itemised export, its monthly payment counts as one card-spending line. Payouts that belong to shared properties are not counted as personal income. Account and card numbers were removed.</p>
