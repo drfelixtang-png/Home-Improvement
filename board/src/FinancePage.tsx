@@ -12,6 +12,7 @@ import { YieldCheck } from './FinYield'
 import { FinPlan } from './FinPlan'
 import { spendingMonthly } from './finPlan'
 import { FinStatements } from './FinStatements'
+import { sources } from './finStatements'
 import { BudgetEditor, Bills } from './FinRecent'
 import { AccountsAnalytics, AssessmentChart, PortfolioSnapshots, CashflowAnalytics, HistoryAnalytics, InvestAnalytics, OverviewAnalytics, PropertyAnalytics } from './FinAnalytics'
 import { RISK_LABEL } from './finAnalytics'
@@ -381,13 +382,39 @@ function TxRow({ t, f, show, cats, onDone, mode }: { t: FinTransaction; f: Finan
 }
 
 const PAGE = 100
+const BANKS = ['TD', 'BMO', 'RBC', 'HSBC', 'Vancity', 'AMEX', 'American Express', 'Scotiabank', 'CIBC', 'Wealthsimple', 'Tangerine']
+
+// Whose account and which bank, from the statement tracker (or the account name when it is not listed there).
+function accountInfo(f: Finance): (account: string) => { person: string; bank: string } {
+  const src = new Map(sources(f).map((x) => [x.label, x]))
+  const names = Object.entries((f.settings as { owners?: Record<string, { name?: string }> }).owners ?? {}).map(([k, v]) => [k, v.name ?? k] as const)
+  return (account) => {
+    const s = src.get(account)
+    const owner = s?.owner ?? names.find(([, n]) => account.toLowerCase().startsWith(`${n.toLowerCase()} `))?.[0] ?? 'felix'
+    const words = account.split(/\s+/)
+    const bank = BANKS.find((b) => words.some((w) => w.toLowerCase() === b.toLowerCase())) ?? words.find((w) => !names.some(([, n]) => n.toLowerCase() === w.toLowerCase())) ?? account
+    return { person: ownerName(owner), bank }
+  }
+}
+
+type SortKey = 'new' | 'old' | 'out' | 'in'
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'new', label: 'Newest first' }, { key: 'old', label: 'Oldest first' },
+  { key: 'out', label: 'Largest money out first' }, { key: 'in', label: 'Largest money in first' },
+]
 
 function Statements({ f, fx, show, onDone }: { f: Finance; fx: Fx; show: boolean; onDone: () => void }) {
   const tx = f.transactions
   const months = [...new Set(tx.map((t) => t.posted_on.slice(0, 7)))].sort().reverse()
+  const info = useMemo(() => accountInfo(f), [f])
   const accounts = [...new Set(tx.map((t) => t.account))].sort()
+  const people = [...new Set(accounts.map((a) => info(a).person))].sort()
+  const banks = [...new Set(accounts.map((a) => info(a).bank))].sort()
   const [view, setView] = useState<'review' | 'all' | 'capital'>(() => (tx.some((t) => !t.reviewed) ? 'review' : 'all'))
   const [account, setAccount] = useState('')
+  const [person, setPerson] = useState('')
+  const [bank, setBank] = useState('')
+  const [sort, setSort] = useState<SortKey>('new')
   const [month, setMonth] = useState('')
   const [kind, setKind] = useState('')
   const [q, setQ] = useState('')
@@ -397,12 +424,21 @@ function Statements({ f, fx, show, onDone }: { f: Finance; fx: Fx; show: boolean
   const review = tx.filter((t) => !t.reviewed).sort((a, b) => b.posted_on.localeCompare(a.posted_on))
   const capital = tx.filter((t) => t.kind === 'capital').sort((a, b) => b.posted_on.localeCompare(a.posted_on))
   const words = q.trim().toLowerCase()
-  const shown = tx.filter((t) => (!account || t.account === account) && (!month || t.posted_on.startsWith(month)) && (!kind || t.kind === kind)
+  const reset = (fn: () => void) => { fn(); setLimit(PAGE) }
+  const byDate = (a: FinTransaction, b: FinTransaction) => b.posted_on.localeCompare(a.posted_on) || (a.seq ?? 0) - (b.seq ?? 0)
+  const cad = (t: FinTransaction) => toCad(t.amount, t.currency, fx)
+  const order: Record<SortKey, (a: FinTransaction, b: FinTransaction) => number> = {
+    new: byDate, old: (a, b) => -byDate(a, b), out: (a, b) => cad(a) - cad(b) || byDate(a, b), in: (a, b) => cad(b) - cad(a) || byDate(a, b),
+  }
+  const shown = tx.filter((t) => (!account || t.account === account) && (!person || info(t.account).person === person) && (!bank || info(t.account).bank === bank)
+    && (!month || t.posted_on.startsWith(month)) && (!kind || t.kind === kind)
     && (!words || `${t.description} ${t.line} ${t.amount}`.toLowerCase().includes(words)))
-    .sort((a, b) => b.posted_on.localeCompare(a.posted_on) || (a.seq ?? 0) - (b.seq ?? 0))
+    .sort(order[sort])
+  const accountsShown = accounts.filter((a) => (!person || info(a).person === person) && (!bank || info(a).bank === bank))
+  const flip = (k: 'date' | 'amount') => reset(() => setSort(k === 'date' ? (sort === 'new' ? 'old' : 'new') : (sort === 'out' ? 'in' : 'out')))
+  const arrow = (k: 'date' | 'amount') => (k === 'date' ? (sort === 'new' ? ' ↓' : sort === 'old' ? ' ↑' : '') : (sort === 'out' ? ' (out first)' : sort === 'in' ? ' (in first)' : ''))
   const sum = (k: TxKind) => shown.filter((t) => t.kind === k).reduce((s, t) => s + toCad(t.amount, t.currency, fx), 0)
   const M = (v: number) => (show ? money(v) : '••••')
-  const reset = (fn: () => void) => { fn(); setLimit(PAGE) }
   const head = <thead><tr><th>Date</th><th>Description</th><th className="n">Amount</th><th>Category</th><th /></tr></thead>
   return (
     <section className="sub-panel span-2">
@@ -419,11 +455,14 @@ function Statements({ f, fx, show, onDone }: { f: Finance; fx: Fx; show: boolean
         </table></div>
       </>) : <p className="all-clear">Everything has been reviewed. Use All entries to check or change any entry.</p>)}
       {view === 'all' && (<>
-        <p className="sub">Open any account, month or category and change the category of any entry. Pick a new category, then press Save. Tick the box to change every entry with the same description at once.</p>
+        <p className="sub">Open any person, bank, account, month or category and change the category of any entry. Pick a new category, then press Save. Tick the box to change every entry with the same description at once. To see the top spending in a month, pick the month, set Type to Spending and press Amount (or choose Largest money out first).</p>
         <div className="fin-filters">
-          <label>Account <select className="fin-year" value={account} onChange={(e) => reset(() => setAccount(e.target.value))}><option value="">All accounts</option>{accounts.map((a) => <option key={a} value={a}>{a}</option>)}</select></label>
+          <label>Person <select className="fin-year" value={person} onChange={(e) => reset(() => { setPerson(e.target.value); setAccount('') })}><option value="">Everyone</option>{people.map((p) => <option key={p} value={p}>{p}</option>)}</select></label>
+          <label>Bank <select className="fin-year" value={bank} onChange={(e) => reset(() => { setBank(e.target.value); setAccount('') })}><option value="">All banks</option>{banks.map((b) => <option key={b} value={b}>{b}</option>)}</select></label>
+          <label>Account <select className="fin-year" value={account} onChange={(e) => reset(() => setAccount(e.target.value))}><option value="">All accounts</option>{accountsShown.map((a) => <option key={a} value={a}>{a}</option>)}</select></label>
           <label>Month <select className="fin-year" value={month} onChange={(e) => reset(() => setMonth(e.target.value))}><option value="">All months</option>{months.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
           <label>Type <select className="fin-year" value={kind} onChange={(e) => reset(() => setKind(e.target.value))}><option value="">All types</option>{(Object.keys(KIND_LABEL) as TxKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></label>
+          <label>Sort <select className="fin-year" value={sort} onChange={(e) => reset(() => setSort(e.target.value as SortKey))}>{SORTS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}</select></label>
           <label>Search <input className="fin-year" type="search" value={q} placeholder="Description, category or amount" onChange={(e) => reset(() => setQ(e.target.value))} /></label>
         </div>
         <div className="stats wide fin-stats">
@@ -431,7 +470,13 @@ function Statements({ f, fx, show, onDone }: { f: Finance; fx: Fx; show: boolean
           <div className="stat"><b>{M(sum('income'))}</b><span>Income</span></div>
           <div className="stat"><b>{M(-sum('expense'))}</b><span>Spending</span></div>
         </div>
-        {shown.length ? (<div className="tbl-wrap"><table className="tbl">{head}
+        {shown.length ? (<div className="tbl-wrap"><table className="tbl">
+          <thead><tr>
+            <th aria-sort={sort === 'new' ? 'descending' : sort === 'old' ? 'ascending' : 'none'}><button type="button" className="th-sort" onClick={() => flip('date')}>Date{arrow('date')}</button></th>
+            <th>Description</th>
+            <th className="n" aria-sort={sort === 'out' ? 'ascending' : sort === 'in' ? 'descending' : 'none'}><button type="button" className="th-sort" onClick={() => flip('amount')}>Amount{arrow('amount')}</button></th>
+            <th>Category</th><th />
+          </tr></thead>
           <tbody>{shown.slice(0, limit).map((t) => <TxRow key={`${t.id}|${t.kind}|${t.line}|${t.reviewed}`} mode="edit" t={t} f={f} show={show} cats={cats} onDone={onDone} />)}</tbody>
         </table></div>) : <p className="sub">No entries match.</p>}
         {shown.length > limit && <button type="button" className="btn" onClick={() => setLimit(limit + PAGE)}>Show {Math.min(PAGE, shown.length - limit)} more of {shown.length - limit}</button>}

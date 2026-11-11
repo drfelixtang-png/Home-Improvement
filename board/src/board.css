@@ -547,3 +547,5 @@ ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
 
 .fin-why { margin: 10px 0; } .fin-why summary { cursor: pointer; color: var(--muted, #9aa3ad); }
 .fin-chart .pline.s4 { stroke: #b79ce0; }
+.th-sort { font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.th-sort:hover { color: var(--fg); }
