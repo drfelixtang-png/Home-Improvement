@@ -33,7 +33,7 @@ export type AssetType = 'stock' | 'reit' | 'fund' | 'crypto' | 'stablecoin' | 'b
 export type TxKind = 'income' | 'expense' | 'transfer' | 'capital'
 export interface FinTransaction {
   id: string; account: string; posted_on: string; amount: number; currency: Cur; description: string
-  kind: TxKind; line: string; reviewed: boolean; source: string
+  kind: TxKind; line: string; reviewed: boolean; source: string; seq?: number
 }
 export interface FinSnapshotRow {
   id: string; as_of: string; symbol: string; name: string; owner: string; account: string; asset_type: string
