@@ -165,6 +165,8 @@ export interface BoardSettings {
   journey_start: string
   areas: Area[]
   habits: Habit[]
+  focus?: Focus | null
+  experiments?: Experiment[]
 }
 
 /** A life area, with the hours a week the owner wants to give it. */
@@ -174,9 +176,23 @@ export interface Habit {
   key: string; label: string; label_zh: string
   per_week: number // daily habits: days a week; weekly habits: times a week
   every?: 'day' | 'week' // 'week': checked as a weekly target (for example, see a friend once a week)
-  auto?: 'bedtime' // filled in from the bed time entered the next morning; no evening tick box
-  by?: string // for auto 'bedtime': latest time to be in bed, 'HH:MM' (after midnight is fine, e.g. '00:30')
+  // Filled in from the next morning's check-in, with no evening tick box:
+  // 'winddown' started winding down by `by`; 'wake' woke up near the usual time; 'bedtime' (older) in bed by `by`.
+  auto?: 'bedtime' | 'winddown' | 'wake'
+  by?: string // 'HH:MM' (after midnight is fine, e.g. '00:30'); for 'wake', the starting usual time
+  tiny?: string; tiny_zh?: string // the smallest version that still counts
+  anchor?: 'am' | 'pm' // shown with the morning or the evening check-in
+  after?: string; after_zh?: string // the routine it follows, for example "After the morning check-in"
+  why?: string // the reason it matters
+  treat?: string // something enjoyable to pair it with
 }
+
+/** The one habit being built right now, and when it started. */
+export interface Focus { key: string; since: string }
+
+/** A two-week experiment: do something on some days and compare a measure. */
+export type ExpMeasure = 'sleep_quality' | 'energy_am' | 'mood_am' | 'energy_pm' | 'mood_pm' | 'bed_time' | 'wind_down' | 'wake_time'
+export interface Experiment { key: string; question: string; action: string; measure: ExpMeasure; start: string; days: number; stopped?: string | null }
 
 export async function loadSettings(): Promise<BoardSettings> {
   await supabase.from('board_settings').upsert({}, { onConflict: 'user_id', ignoreDuplicates: true })
