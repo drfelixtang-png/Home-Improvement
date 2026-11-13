@@ -292,7 +292,7 @@ function Board({ session }: { session: Session }) {
           <FinancePage f={fin.data} fx={fx.data} userId={session.user.id} onReload={reloadFin} lang={lang} tab={route.split('/')[1] ?? 'overview'} />
         )
       ) : page === 'me' ? (
-        settings ? wrap(ci, (d) => <MePage settings={settings} checkins={d} onReload={reloadCi} onSaveSettings={save} lang={lang} />) : <Loading />
+        settings ? wrap(ci, (d) => <MePage settings={settings} checkins={d} calendar={s && snap.data && vanDate(new Date(s.generated_at ?? snap.data.created_at)) === vanDate() ? s.calendar?.today : undefined} onReload={reloadCi} onSaveSettings={save} lang={lang} />) : <Loading />
       ) : page === 'home' ? (
         wrap(hi, (d) => <HomePage h={hh.data ?? null} items={d} alerts={alerts} alertsError={al.error ?? null} onReload={reloadHi} lang={lang} />)
       ) : page === 'review' ? (

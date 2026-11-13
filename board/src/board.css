@@ -549,3 +549,47 @@ ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
 .fin-chart .pline.s4 { stroke: #b79ce0; }
 .th-sort { font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
 .th-sort:hover { color: var(--fg); }
+
+/* Me page: small steps, focus habit, sleep record, evidence and experiments */
+.step-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.step-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.step-list li:last-child { border-bottom: 0; }
+.hl { display: flex; flex-direction: column; min-width: 0; flex: 1 1 220px; }
+.hl-name { font-size: 0.92rem; }
+.step-pick { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; flex: none; }
+.step-pick button { font: inherit; font-size: 0.78rem; color: var(--muted); background: var(--bg); border: 0; border-right: 1px solid var(--line); padding: 5px 9px; cursor: pointer; }
+.step-pick button:last-child { border-right: 0; }
+.step-pick button.on { color: var(--fg); background: var(--panel); font-weight: 600; }
+.step-pick button.on.tiny { color: var(--bg); background: color-mix(in srgb, var(--good) 55%, var(--bg)); }
+.step-pick button.on.full { color: var(--bg); background: var(--good); }
+.focus-chip { display: inline-block; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
+.busy-note { margin: 0; padding: 8px 10px; background: var(--panel); border-left: 2px solid var(--good); font-size: 0.88rem; }
+.wine-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 0.86rem; color: var(--muted); }
+.focus-card { border: 1px solid var(--accent); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: var(--panel-2); }
+.focus-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 1rem; }
+.focus-why { margin: 0; font-size: 0.9rem; }
+.focus-grid { display: grid; grid-template-columns: repeat(21, minmax(0, 1fr)); gap: 4px; max-width: 520px; }
+.focus-grid .hd { min-width: 8px; }
+.focus-msg { margin: 0; font-size: 0.9rem; }
+.focus-pick { margin: 8px 0 4px; align-items: center; }
+.keep-going { margin: 14px 0 6px; font-size: 0.85rem; color: var(--muted); }
+.hd.tiny { background: color-mix(in srgb, var(--good) 50%, transparent); }
+.hd.rest { background: var(--chip); opacity: 0.55; }
+.hd.future { background: transparent; outline: 1px solid var(--line); outline-offset: -1px; }
+.evidence { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 0.92rem; }
+.exp-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.exp-list li { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; }
+.exp-act { display: flex; gap: 6px; margin-top: 4px; }
+.exp-form { display: flex; flex-direction: column; gap: 8px; }
+.exp-form label { display: flex; flex-direction: column; gap: 3px; font-size: 0.82rem; color: var(--muted); }
+.exp-form input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px; min-width: 0; }
+.exp-form .fin-year { margin-left: 0; align-self: flex-start; }
+.exp-ideas { display: flex; flex-wrap: wrap; gap: 6px; }
+.exp-ideas .btn { font-size: 0.78rem; text-align: left; white-space: normal; }
+.habit-edit { border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; }
+.habit-edit summary { cursor: pointer; font-size: 0.9rem; }
+.habit-edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 12px; margin: 8px 0; }
+.habit-edit-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 0.78rem; color: var(--muted); min-width: 0; }
+.habit-edit-grid input { font: inherit; font-size: 0.88rem; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0; }
+.habit-edit-grid .fin-year { margin-left: 0; }
+.habit-edit-grid .wide { grid-column: 1 / -1; }

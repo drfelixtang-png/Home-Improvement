@@ -19,25 +19,28 @@ export interface Checkin {
   energy_pm: number | null
   mood_pm: number | null
   priorities_done: boolean[]
-  habits: Record<string, boolean>
+  habits: Record<string, boolean | 'tiny'> // true: the full version; 'tiny': the smallest version
   hours: Record<string, number>
   win: string
   slipped: string
   better_tomorrow: string
   evening_note: string
   evening_at: string | null
+  wine_glasses: number | null // red wine the night before, glasses
+  wind_down: string | null // 'HH:MM', when winding down started the night before
 }
 
 export const emptyCheckin = (day: string): Checkin => ({
   day, sleep_hours: null, bed_time: null, wake_time: null, sleep_quality: null, energy_am: null, mood_am: null, priorities: ['', '', ''],
   morning_note: '', morning_at: null, energy_pm: null, mood_pm: null, priorities_done: [false, false, false],
   habits: {}, hours: {}, win: '', slipped: '', better_tomorrow: '', evening_note: '', evening_at: null,
+  wine_glasses: null, wind_down: null,
 })
 
 export async function loadCheckins(fromDay: string): Promise<Checkin[]> {
   const { data, error } = await supabase.from('checkins').select('*').gte('day', fromDay).order('day')
   if (error) throw error
-  return (data ?? []).map((r) => ({ ...emptyCheckin(r.day), ...r, sleep_hours: r.sleep_hours === null ? null : Number(r.sleep_hours), bed_time: r.bed_time ? String(r.bed_time).slice(0, 5) : null, wake_time: r.wake_time ? String(r.wake_time).slice(0, 5) : null })) as Checkin[]
+  return (data ?? []).map((r) => ({ ...emptyCheckin(r.day), ...r, sleep_hours: r.sleep_hours === null ? null : Number(r.sleep_hours), bed_time: r.bed_time ? String(r.bed_time).slice(0, 5) : null, wake_time: r.wake_time ? String(r.wake_time).slice(0, 5) : null, wind_down: r.wind_down ? String(r.wind_down).slice(0, 5) : null, wine_glasses: r.wine_glasses === null || r.wine_glasses === undefined ? null : Number(r.wine_glasses) })) as Checkin[]
 }
 
 export async function saveCheckin(day: string, patch: Partial<Checkin>): Promise<void> {
@@ -86,46 +89,82 @@ export function weekStart(day: string): string {
 }
 
 // ------------------------------------------------------------------ habits
-export type DayMark = 'done' | 'missed' | 'unknown' | 'today'
+// Each habit has a tiny version and a full version; both count. Wind-down and wake-up are filled in
+// from the next morning's check-in. The tone is encouraging: no red marks, only what went well.
+export type DayMark = 'done' | 'tiny' | 'missed' | 'unknown' | 'today'
+const counts = (m: DayMark) => m === 'done' || m === 'tiny'
 
 export interface HabitStatus {
   habit: Habit
-  grid: { day: string; mark: DayMark }[] // last 28 days, oldest first
+  grid: { day: string; mark: DayMark }[] // last 28 days (or 8 weeks), oldest first
   streak: number // daily habits: days in a row; weekly habits: weeks in a row on target
   thisWeek: number
-  warning: string | null
-  warning_zh: string | null
+  last28: number // days done (tiny or full) in the last 28 days
+  target: string | null // wind-down goal or usual wake-up time, 'HH:MM'
+  note: string | null // a gentle, encouraging line
+  note_zh: string | null
 }
 
 // Minutes after noon, so that 23:45 comes before 00:30.
-const lateness = (t: string) => { const [h, m] = t.split(':').map(Number); return (h < 12 ? h + 24 : h) * 60 + m - 720 }
+export const lateness = (t: string) => { const [h, m] = t.split(':').map(Number); return (h < 12 ? h + 24 : h) * 60 + m - 720 }
+export const fromLateness = (x: number) => { const t = ((Math.round(x) + 720) % 1440 + 1440) % 1440; return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}` }
+const clockMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
+const median = (xs: number[]) => { const v = [...xs].sort((a, b) => a - b); return v.length ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null }
+const toClock = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(Math.round(m) % 60).padStart(2, '0')}`
+
+/** The usual wake-up time: the middle of the 14 mornings before `day` (at least 5 recorded), else the starting time. */
+export function usualWake(habit: Habit, byDay: Map<string, Checkin>, day: string): string | null {
+  const xs = Array.from({ length: 14 }, (_, i) => byDay.get(addDays(day, -1 - i))?.wake_time).filter((x): x is string => !!x).map(clockMins)
+  const m = xs.length >= 5 ? median(xs) : null
+  return m !== null ? toClock(Math.round(m / 15) * 15) : habit.by ?? null
+}
+
+/** Wind-down over the last 7 nights: how many met the goal, how many were recorded, and the usual time. */
+export function windDownWeek(habit: Habit, byDay: Map<string, Checkin>, today: string): { met: number; recorded: number; usual: string | null } {
+  const xs = Array.from({ length: 7 }, (_, i) => byDay.get(addDays(today, -i))?.wind_down).filter((x): x is string => !!x)
+  const goal = lateness(habit.by ?? '00:00')
+  const m = median(xs.map(lateness))
+  return { met: xs.filter((x) => lateness(x) <= goal).length, recorded: xs.length, usual: m === null ? null : fromLateness(Math.round(m / 15) * 15) }
+}
 
 export function habitStatus(habit: Habit, byDay: Map<string, Checkin>, today: string): HabitStatus {
   const markOf = (day: string): DayMark => {
-    if (habit.auto === 'bedtime') {
-      // The night of `day` is recorded as the bed time in the next morning's check-in.
-      const bed = byDay.get(addDays(day, 1))?.bed_time
-      if (bed) return lateness(bed) <= lateness(habit.by ?? '00:30') ? 'done' : 'missed'
+    if (habit.auto === 'bedtime' || habit.auto === 'winddown') {
+      // The night of `day` is recorded in the next morning's check-in.
+      const next = byDay.get(addDays(day, 1))
+      const t = habit.auto === 'winddown' ? next?.wind_down : next?.bed_time
+      if (t) return lateness(t) <= lateness(habit.by ?? '00:30') ? 'done' : 'missed'
       return day >= addDays(today, -1) ? 'today' : 'unknown'
     }
+    if (habit.auto === 'wake') {
+      const w = byDay.get(day)?.wake_time
+      const usual = usualWake(habit, byDay, day)
+      if (w && usual) return Math.abs(clockMins(w) - clockMins(usual)) <= 30 ? 'done' : 'missed'
+      if (w) return 'done' // nothing to compare with yet
+      return day === today ? 'today' : 'unknown'
+    }
     const c = byDay.get(day)
-    if (c?.habits[habit.key]) return 'done'
+    const v = c?.habits[habit.key]
+    if (v === 'tiny') return 'tiny'
+    if (v) return 'done'
     if (day === today) return 'today'
     if (!c?.evening_at) return 'unknown'
     return 'missed'
   }
   const ws = weekStart(today)
-  const countWeek = (w: string) => Array.from({ length: 7 }, (_, k) => addDays(w, k)).filter((d) => d <= today && markOf(d) === 'done').length
+  const countWeek = (w: string) => Array.from({ length: 7 }, (_, k) => addDays(w, k)).filter((d) => d <= today && counts(markOf(d))).length
+  const days28 = Array.from({ length: 28 }, (_, i) => addDays(today, i - 27))
+  const last28 = days28.filter((d) => counts(markOf(d))).length
+  const target = habit.auto === 'winddown' || habit.auto === 'bedtime' ? habit.by ?? null : habit.auto === 'wake' ? usualWake(habit, byDay, today) : null
   let streak = 0
-  let warning: string | null = null
-  let warning_zh: string | null = null
+  let note: string | null = null
+  let note_zh: string | null = null
 
   if (habit.every === 'week') {
-    // One cell per week for the last 8 weeks; never miss two weeks in a row.
-    const target = Math.max(1, habit.per_week)
+    const goal = Math.max(1, habit.per_week)
     const weeks = Array.from({ length: 8 }, (_, i) => addDays(ws, (i - 7) * 7))
     const weekMark = (w: string): DayMark => {
-      if (countWeek(w) >= target) return 'done'
+      if (countWeek(w) >= goal) return 'done'
       if (w === ws) return 'today'
       const any = Array.from({ length: 7 }, (_, k) => byDay.get(addDays(w, k))?.evening_at).some(Boolean)
       return any ? 'missed' : 'unknown'
@@ -134,43 +173,20 @@ export function habitStatus(habit: Habit, byDay: Map<string, Checkin>, today: st
     const thisWeek = countWeek(ws)
     let w = weekMark(ws) === 'done' ? ws : addDays(ws, -7)
     while (weekMark(w) === 'done' && streak < 520) { streak++; w = addDays(w, -7) }
-    if (thisWeek < target) {
-      const last = weekMark(addDays(ws, -7)), before = weekMark(addDays(ws, -14))
-      if (last !== 'done' && before !== 'done' && last !== 'unknown') { warning = 'Missed 2 weeks. Do it this week.'; warning_zh = '已經兩星期未做，本週一定要做。' }
-      else if (last === 'missed') { warning = 'Missed last week. Do not miss two weeks.'; warning_zh = '上週未做，本週不要再錯過。' }
-    }
-    return { habit, grid, streak, thisWeek, warning, warning_zh }
+    if (thisWeek >= goal) { note = 'Done for this week. Well done.'; note_zh = '本週已完成，做得好。' }
+    else if (weekMark(addDays(ws, -7)) !== 'done') { note = `The tiny version counts: ${habit.tiny || 'one small step'}.`; note_zh = `小步也算數：${habit.tiny_zh || habit.tiny || '一小步'}。` }
+    return { habit, grid, streak, thisWeek, last28, target, note, note_zh }
   }
 
-  const grid = Array.from({ length: 28 }, (_, i) => addDays(today, i - 27)).map((day) => ({ day, mark: markOf(day) }))
-  const thisWeek = grid.filter((g) => g.day >= ws && g.mark === 'done').length
-
-  if (habit.per_week >= 7) {
-    // Count back from yesterday (today still counts if already done).
-    let d = markOf(today) === 'done' ? today : addDays(today, -1)
-    while (markOf(d) === 'done' && streak < 1000) { streak++; d = addDays(d, -1) }
-    const y = markOf(addDays(today, -1))
-    const y2 = markOf(addDays(today, -2))
-    if (markOf(today) !== 'done') {
-      if (y !== 'done' && y2 !== 'done') { warning = 'Missed 2 days. Start again today.'; warning_zh = '已經兩日未做，今日重新開始。' }
-      else if (y !== 'done') { warning = 'Missed yesterday. Do not miss twice.'; warning_zh = '昨日未做，今日不要再錯過。' }
-    }
-  } else {
-    // Weekly target: count full past weeks that met the target.
-    let w = addDays(ws, -7)
-    for (let i = 0; i < 52; i++) {
-      let n = 0
-      for (let k = 0; k < 7; k++) if (markOf(addDays(w, k)) === 'done') n++
-      if (n >= habit.per_week) { streak++; w = addDays(w, -7) } else break
-    }
-    const daysLeft = 7 - daysBetween(ws, today) // including today
-    const need = habit.per_week - thisWeek
-    if (need > 0 && need >= daysLeft) {
-      warning = need > daysLeft ? `Target out of reach this week (${thisWeek}/${habit.per_week}).` : `Needs every remaining day this week (${thisWeek}/${habit.per_week}).`
-      warning_zh = need > daysLeft ? `本週已難達標（${thisWeek}/${habit.per_week}）。` : `本週餘下每日都要做（${thisWeek}/${habit.per_week}）。`
-    }
-  }
-  return { habit, grid, streak, thisWeek, warning, warning_zh }
+  const grid = days28.map((day) => ({ day, mark: markOf(day) }))
+  const thisWeek = grid.filter((g) => g.day >= ws && counts(g.mark)).length
+  let d = counts(markOf(today)) ? today : addDays(today, -1)
+  while (counts(markOf(d)) && streak < 1000) { streak++; d = addDays(d, -1) }
+  const quiet = !counts(markOf(today)) && markOf(addDays(today, -1)) === 'missed' && markOf(addDays(today, -2)) === 'missed'
+  if (counts(markOf(today))) { note = 'Done today. Each time makes the next one easier.'; note_zh = '今日已做，每做一次，下次更容易。' }
+  else if (quiet && !habit.auto) { note = `A couple of quiet days. Starting again is the habit: ${habit.tiny || 'one small step'} is enough today.`; note_zh = `休息了兩日，重新開始就是習慣：今日做${habit.tiny_zh || habit.tiny || '一小步'}已足夠。` }
+  else if (streak >= 2) { note = `${streak} days in a row. Keep it light.`; note_zh = `連續 ${streak} 日，輕鬆繼續。` }
+  return { habit, grid, streak, thisWeek, last28, target, note, note_zh }
 }
 
 // ------------------------------------------------------------------ time by life area
