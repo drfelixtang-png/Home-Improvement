@@ -2,7 +2,7 @@
 // and wake-up, plus busy days from the calendar and the results of two-week experiments.
 import type { CalEvent, Experiment, ExpMeasure, Habit } from './data'
 import type { Checkin, Ledger } from './me'
-import { addDays, avg, daysBetween, fromLateness, habitStatus, lateness, titleHas } from './me'
+import { addDays, avg, calendarMinutes, daysBetween, fromLateness, habitStatus, lateness } from './me'
 
 export interface Finding { text: string; text_zh: string; strength: number }
 export interface Pending { text: string; text_zh: string }
@@ -46,7 +46,7 @@ export function findings(habits: Habit[], checkins: Checkin[], today: string, le
   const days = checkins.map((c) => c.day).filter((d) => d < today)
 
   for (const h of habits.filter((x) => !x.auto)) {
-    const did = (d: string) => !!byDay.get(d)?.habits[h.key] || (ledger?.get(d) ?? []).some((t) => titleHas(t, h.match))
+    const did = (d: string) => !!byDay.get(d)?.habits[h.key] || calendarMinutes(ledger, d, h.match) !== null
     const done = days.filter((d) => byDay.get(d)?.evening_at && did(d))
     const not = days.filter((d) => byDay.get(d)?.evening_at && !did(d))
     let any = false
@@ -128,15 +128,17 @@ export const expKey = (e: Experiment) => `exp_${e.key}`
 export interface ExpResult { day: number; ended: boolean; did: number; recorded: number; text: string; text_zh: string }
 
 /** Progress and result of an experiment: days it was done compared with days it was not, and with the 2 weeks before. */
-export function experimentResult(e: Experiment, checkins: Checkin[], today: string): ExpResult {
+export function experimentResult(e: Experiment, checkins: Checkin[], today: string, ledger?: Ledger): ExpResult {
   const byDay = new Map(checkins.map((c) => [c.day, c]))
   const end = e.stopped ?? addDays(e.start, e.days - 1)
   const last = end < today ? end : today
   const day = Math.min(e.days, daysBetween(e.start, today) + 1)
   const span = Array.from({ length: Math.max(0, daysBetween(e.start, last) + 1) }, (_, i) => addDays(e.start, i))
-  const did = span.filter((d) => byDay.get(d)?.habits[expKey(e)])
-  const recorded = span.filter((d) => byDay.get(d)?.evening_at)
-  const not = recorded.filter((d) => !byDay.get(d)?.habits[expKey(e)])
+  // Done on a day with a matching calendar entry (or an older evening tick); every day with calendar records or a check-in counts as recorded.
+  const doneOn = (d: string) => !!byDay.get(d)?.habits[expKey(e)] || calendarMinutes(ledger, d, e.match) !== null
+  const did = span.filter(doneOn)
+  const recorded = span.filter((d) => byDay.get(d)?.evening_at || ledger?.has(d))
+  const not = recorded.filter((d) => !doneOn(d))
   const vals = (ds: string[]) => ds.map((d) => measureOf(e.measure, d, byDay)).filter((x): x is number => x !== null)
   const before = vals(Array.from({ length: 14 }, (_, i) => addDays(e.start, -14 + i)))
   const lbl = MEASURES[e.measure]
@@ -157,9 +159,9 @@ export function experimentResult(e: Experiment, checkins: Checkin[], today: stri
   return { day, ended, did: did.length, recorded: recorded.length, text, text_zh }
 }
 
-export const EXP_IDEAS: { question: string; action: string; measure: ExpMeasure }[] = [
-  { question: 'Does a 10-minute walk in the morning light help me wind down earlier?', action: '10-minute walk outside within an hour of waking', measure: 'wind_down' },
-  { question: 'Do nights without red wine give me better sleep?', action: 'No red wine tonight', measure: 'sleep_quality' },
-  { question: 'Does putting the phone on the charger when winding down help me sleep better?', action: 'Phone on the charger outside the bedroom when winding down', measure: 'sleep_quality' },
-  { question: 'Does Baduanjin in the morning lift my energy for the day?', action: 'Baduanjin before 10 am', measure: 'energy_pm' },
+export const EXP_IDEAS: { question: string; action: string; match: string; measure: ExpMeasure }[] = [
+  { question: 'Does a 10-minute walk in the morning light help me wind down earlier?', action: '10-minute walk outside within an hour of waking', match: 'morning walk', measure: 'wind_down' },
+  { question: 'Do nights without red wine give me better sleep?', action: 'No red wine tonight', match: 'no wine', measure: 'sleep_quality' },
+  { question: 'Does putting the phone on the charger when winding down help me sleep better?', action: 'Phone on the charger outside the bedroom when winding down', match: 'phone away', measure: 'sleep_quality' },
+  { question: 'Does Baduanjin in the morning lift my energy for the day?', action: 'Baduanjin before 10 am', match: 'baduanjin', measure: 'energy_pm' },
 ]

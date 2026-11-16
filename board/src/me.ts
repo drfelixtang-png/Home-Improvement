@@ -78,11 +78,17 @@ export const titleHas = (title: string, match: string | undefined): boolean => {
 }
 
 /** Days with calendar records, and the titles recorded each day (lower case), for habits. */
-export type Ledger = Map<string, string[]>
+export type Ledger = Map<string, { title: string; minutes: number }[]>
 export const ledgerOf = (entries: TimeEntry[]): Ledger => {
   const m: Ledger = new Map()
-  for (const e of entries) m.set(e.day, [...(m.get(e.day) ?? []), e.title.toLowerCase()])
+  for (const e of entries) m.set(e.day, [...(m.get(e.day) ?? []), { title: e.title.toLowerCase(), minutes: e.minutes }])
   return m
+}
+/** Minutes on `day` in calendar entries whose title has one of the words; null when none. */
+export const calendarMinutes = (ledger: Ledger | undefined, day: string, match: string | undefined): number | null => {
+  if (!ledger || !match) return null
+  const hits = (ledger.get(day) ?? []).filter((x) => titleHas(x.title, match))
+  return hits.length ? hits.reduce((s, x) => s + x.minutes, 0) : null
 }
 
 // ------------------------------------------------------------------ weekly reviews (written by Claude)
@@ -166,7 +172,12 @@ export function windDownWeek(habit: Habit, byDay: Map<string, Checkin>, today: s
 
 export function habitStatus(habit: Habit, byDay: Map<string, Checkin>, today: string, ledger?: Ledger): HabitStatus {
   // A calendar entry whose title has one of the habit's words counts as the full version.
-  const inCalendar = (day: string) => !!ledger && !!habit.match && (ledger.get(day) ?? []).some((t) => titleHas(t, habit.match))
+  // The calendar is the record: a matching entry counts; shorter than the full version counts as tiny.
+  const fromCalendar = (day: string): DayMark | null => {
+    const mins = calendarMinutes(ledger, day, habit.match)
+    if (mins === null) return null
+    return habit.full_minutes && mins < habit.full_minutes ? 'tiny' : 'done'
+  }
   const markOf = (day: string): DayMark => {
     if (habit.auto === 'log') {
       if (ledger?.has(day)) return 'done'
@@ -189,8 +200,9 @@ export function habitStatus(habit: Habit, byDay: Map<string, Checkin>, today: st
     }
     const c = byDay.get(day)
     const v = c?.habits[habit.key]
-    if (v === true || inCalendar(day)) return 'done'
-    if (v === 'tiny') return 'tiny'
+    const cal = fromCalendar(day)
+    if (v === true || cal === 'done') return 'done'
+    if (v === 'tiny' || cal === 'tiny') return 'tiny'
     if (day === today) return 'today'
     if (!c?.evening_at) return 'unknown'
     return 'missed'

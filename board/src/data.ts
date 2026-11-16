@@ -185,6 +185,7 @@ export interface Habit {
   // 'winddown' started winding down by `by`; 'wake' woke up near the usual time; 'bedtime' (older) in bed by `by`.
   auto?: 'bedtime' | 'winddown' | 'wake' | 'log' // 'log': the day has activity recorded in the calendar
   match?: string // words (separated by |) in a calendar entry title that count as doing this habit
+  full_minutes?: number // calendar time that counts as the full version; less is the tiny version
   by?: string // 'HH:MM' (after midnight is fine, e.g. '00:30'); for 'wake', the starting usual time
   tiny?: string; tiny_zh?: string // the smallest version that still counts
   anchor?: 'am' | 'pm' // shown with the morning or the evening check-in
@@ -198,7 +199,7 @@ export interface Focus { key: string; since: string }
 
 /** A two-week experiment: do something on some days and compare a measure. */
 export type ExpMeasure = 'sleep_quality' | 'energy_am' | 'mood_am' | 'energy_pm' | 'mood_pm' | 'bed_time' | 'wind_down' | 'wake_time'
-export interface Experiment { key: string; question: string; action: string; measure: ExpMeasure; start: string; days: number; stopped?: string | null }
+export interface Experiment { key: string; question: string; action: string; match?: string; measure: ExpMeasure; start: string; days: number; stopped?: string | null } // match: words in a calendar title on the days it was done
 
 export async function loadSettings(): Promise<BoardSettings> {
   await supabase.from('board_settings').upsert({}, { onConflict: 'user_id', ignoreDuplicates: true })
