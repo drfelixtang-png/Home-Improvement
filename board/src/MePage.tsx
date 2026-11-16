@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Area, BoardSettings, CalEvent, Experiment, ExpMeasure, Focus, Habit } from './data'
-import type { Checkin, HabitStatus } from './me'
-import { addDays, daysBetween, emptyCheckin, fromLateness, habitStatus, hoursByArea, lateness, saveCheckin, sleepFrom, slugKey, usualWake, vanDate, vanHour, weekStart, windDownWeek } from './me'
+import type { Checkin, HabitStatus, Ledger, TimeEntry } from './me'
+import { addDays, daysBetween, ledgerOf, loadTimeEntries, updateTimeEntries, emptyCheckin, fromLateness, habitStatus, lateness, saveCheckin, sleepFrom, slugKey, usualWake, vanDate, vanHour, weekStart, windDownWeek } from './me'
 import { busyDay, EXP_IDEAS, experimentResult, expKey, findings, MEASURES } from './meInsights'
 
 type Lang = 'zh' | 'en'
@@ -172,14 +172,13 @@ function Morning({ day, c, prev, habits, focusKey, busy, onSaved }: { day: strin
 }
 
 // ================================================================= evening
-function Evening({ day, c, habits, areas, focusKey, busy, experiments, onSaved, byDay }: {
-  day: string; c: Checkin; habits: Habit[]; areas: Area[]; focusKey: string | null; busy: { busy: boolean; why: string }; experiments: Experiment[]; onSaved: () => void; byDay: Map<string, Checkin>
+function Evening({ day, c, habits, focusKey, busy, experiments, onSaved, byDay, ledger }: {
+  day: string; c: Checkin; habits: Habit[]; focusKey: string | null; busy: { busy: boolean; why: string }; experiments: Experiment[]; onSaved: () => void; byDay: Map<string, Checkin>; ledger: Ledger
 }) {
   const weekDone = (h: Habit) => Array.from({ length: 7 }, (_, k) => addDays(weekStart(day), k)).filter((d) => d < day && byDay.get(d)?.habits[h.key]).length
   const [f, setF] = useState(c)
   const [msg, setMsg] = useState<string | null>(null)
   const pri = f.priorities.filter((p) => p.trim())
-  const total = areas.reduce((s, a) => s + (Number(f.hours[a.key]) || 0), 0)
   // Only the steps changed here are saved over the latest record, so a step ticked in the morning is kept.
   const [edits, setEdits] = useState<Record<string, Step>>({})
   const stepOf = (key: string): Step => (key in edits ? edits[key] : c.habits[key])
@@ -188,6 +187,7 @@ function Evening({ day, c, habits, areas, focusKey, busy, experiments, onSaved, 
   // The focus habit first, then evening habits, then the rest. Morning habits are ticked in the morning but can be changed here.
   const rank = (h: Habit) => (h.key === focusKey ? 0 : h.anchor === 'pm' ? 1 : h.anchor === 'am' ? 3 : 2)
   const list = habits.filter((h) => !h.auto).sort((a, b) => rank(a) - rank(b))
+  const fromCal = (h: Habit) => !c.habits[h.key] && habitStatus(h, byDay, day, ledger).grid.find((g) => g.day === day)?.mark === 'done'
   const running = experiments.filter((e) => !e.stopped && day >= e.start && day <= addDays(e.start, e.days - 1))
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -222,7 +222,7 @@ function Evening({ day, c, habits, areas, focusKey, busy, experiments, onSaved, 
             <li key={h.key}>
               <HabitLine h={h} focus={h.key === focusKey} />
               {h.every === 'week' && <span className="sub">This week {weekDone(h) + (stepOf(h.key) ? 1 : 0)}/{Math.max(1, h.per_week)}</span>}
-              <StepPick h={h} value={stepOf(h.key)} onChange={(v) => setStep(h.key, v)} />
+              {fromCal(h) && !(h.key in edits) ? <span className="sub">Done, from your calendar ✓</span> : <StepPick h={h} value={stepOf(h.key)} onChange={(v) => setStep(h.key, v)} />}
             </li>
           ))}
         </ul>
@@ -236,17 +236,11 @@ function Evening({ day, c, habits, areas, focusKey, busy, experiments, onSaved, 
           ))}
         </fieldset>
       )}
-      <fieldset className="field">
-        <legend className="field-l">Where your time went, hours 時間分配 <span className="sub inline">Total {total} h</span></legend>
-        <div className="hours-grid">
-          {areas.map((a) => (
-            <div key={a.key} className="hours-row">
-              <label htmlFor={`h-${a.key}`}>{a.label} <span className="tc">{a.label_zh}</span></label>
-              <Stepper id={`h-${a.key}`} value={Number(f.hours[a.key]) || 0} onChange={(v) => setF({ ...f, hours: { ...f.hours, [a.key]: v } })} />
-            </div>
-          ))}
-        </div>
-      </fieldset>
+      <div className="field cal-log">
+        <span className="field-l">Record the day in Google Calendar 在日曆記錄今日</span>
+        <span className="sub">Add what you actually did today as one-off events, on top of any planned ones (the tiny version: the main 2 or 3 things). It is read into your time ledger tomorrow morning.{ledger.has(addDays(day, -1)) ? ' Yesterday is recorded.' : ''}</span>
+        <a className="btn ghost" href={`https://calendar.google.com/calendar/r/day/${day.replace(/-/g, '/')}`} target="_blank" rel="noreferrer">Open Google Calendar 開啟日曆</a>
+      </div>
       <Rating id="epm" label="Energy this evening 精神" value={f.energy_pm} onChange={(v) => setF({ ...f, energy_pm: v })} low="Drained" high="Full" />
       <Rating id="mpm" label="Mood today overall 心情" value={f.mood_pm} onChange={(v) => setF({ ...f, mood_pm: v })} low="Low" high="Great" />
       <div className="field">
@@ -281,7 +275,7 @@ function Grid({ h, s }: { h: Habit; s: HabitStatus }) {
   )
 }
 
-function Habits({ habits, byDay, today, lang, focus, onFocus }: { habits: Habit[]; byDay: Map<string, Checkin>; today: string; lang: Lang; focus: Focus | null; onFocus: (key: string) => Promise<void> }) {
+function Habits({ habits, byDay, today, lang, focus, onFocus, ledger }: { habits: Habit[]; byDay: Map<string, Checkin>; today: string; lang: Lang; focus: Focus | null; onFocus: (key: string) => Promise<void>; ledger: Ledger }) {
   const fh = habits.find((h) => h.key === focus?.key) ?? null
   const rest = habits.filter((h) => h !== fh)
   const [pick, setPick] = useState('')
@@ -289,7 +283,7 @@ function Habits({ habits, byDay, today, lang, focus, onFocus }: { habits: Habit[
   const choose = async () => { if (!pick) return; setMsg('Saving…'); try { await onFocus(pick); setMsg(null); setPick('') } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) } }
   let focusCard = null
   if (fh && focus) {
-    const s = habitStatus(fh, byDay, today)
+    const s = habitStatus(fh, byDay, today, ledger)
     const dayN = Math.min(FOCUS_DAYS, daysBetween(focus.since, today) + 1)
     const span = Array.from({ length: FOCUS_DAYS }, (_, i) => addDays(focus.since, i))
     const marks = span.map((d) => ({ d, m: d > today ? 'future' : (s.grid.find((g) => g.day === d)?.mark ?? 'unknown') }))
@@ -328,11 +322,11 @@ function Habits({ habits, byDay, today, lang, focus, onFocus }: { habits: Habit[
       <h4 className="keep-going">Keep going if you can 有空就做</h4>
       <ul className="habits">
         {rest.map((h) => {
-          const s = habitStatus(h, byDay, today)
-          const freq = h.auto === 'winddown' ? `Goal: start winding down by ${s.target ?? ''}` : h.auto === 'wake' ? `Usual wake-up time ${s.target ?? 'not known yet'}, within 30 minutes` : h.every === 'week' ? (h.per_week > 1 ? `${h.per_week} times a week` : 'Once a week') : h.per_week >= 7 ? 'Every day' : `${h.per_week} days a week`
+          const s = habitStatus(h, byDay, today, ledger)
+          const freq = h.auto === 'log' ? 'Every day, from one-off events in your calendar' : h.auto === 'winddown' ? `Goal: start winding down by ${s.target ?? ''}` : h.auto === 'wake' ? `Usual wake-up time ${s.target ?? 'not known yet'}, within 30 minutes` : h.every === 'week' ? (h.per_week > 1 ? `${h.per_week} times a week` : 'Once a week') : h.per_week >= 7 ? 'Every day' : `${h.per_week} days a week`
           return (
             <li key={h.key}>
-              <div className="h-name">{h.label} <span className="tc">{h.label_zh}</span><span className="sub">{freq}{h.auto ? ' · from the morning check-in' : ''}</span></div>
+              <div className="h-name">{h.label} <span className="tc">{h.label_zh}</span><span className="sub">{freq}{h.auto && h.auto !== 'log' ? ' · from the morning check-in' : h.match ? ' · also ticked from your calendar' : ''}</span></div>
               <Grid h={h} s={s} />
               <div className="h-stat">
                 <b>{s.last28}</b><span>{h.every === 'week' ? 'times in 8 weeks' : 'days in 4 weeks'}</span>
@@ -400,8 +394,8 @@ function SleepRecord({ habits, byDay, today, onSaveHabits }: { habits: Habit[]; 
 }
 
 // ================================================================= what your data shows
-function Evidence({ habits, checkins, today, lang }: { habits: Habit[]; checkins: Checkin[]; today: string; lang: Lang }) {
-  const { found, waiting } = useMemo(() => findings(habits, checkins, today), [habits, checkins, today])
+function Evidence({ habits, checkins, today, lang, ledger }: { habits: Habit[]; checkins: Checkin[]; today: string; lang: Lang; ledger: Ledger }) {
+  const { found, waiting } = useMemo(() => findings(habits, checkins, today, ledger), [habits, checkins, today, ledger])
   return (
     <section className="sub-panel span-2">
       <h3>What your own data shows 你的數據 <span className="sub inline">from your check-ins, last 4 months</span></h3>
@@ -509,33 +503,146 @@ function HabitEditor({ rows, onSave }: { rows: Habit[]; onSave: (rows: Habit[]) 
 }
 
 // ================================================================= time
-function TimeBars({ areas, checkins, today }: { areas: Area[]; checkins: Checkin[]; today: string }) {
+const isDaily = (a: Area) => !a.kind || a.kind === 'daily'
+const fmtH = (m: number) => { const h = Math.round((m / 60) * 4) / 4; return h ? `${h} h` : '–' }
+
+/** Hours by daily area this week against the weekly targets, and the last 7 days one by one. */
+function TimeView({ areas, entries, today, err }: { areas: Area[]; entries: TimeEntry[]; today: string; err: string | null }) {
+  const daily = areas.filter(isDaily)
   const ws = weekStart(today)
-  const week = hoursByArea(areas, checkins, ws, addDays(ws, 6))
-  const last = hoursByArea(areas, checkins, addDays(ws, -7), addDays(ws, -1))
-  const max = Math.max(1, ...week.map((w) => Math.max(w.hours, w.area.target)), ...last.map((w) => w.hours))
+  const mins = (key: string, from: string, to: string) => entries.filter((e) => e.category === key && e.day >= from && e.day <= to).reduce((s, e) => s + e.minutes, 0)
+  const week = daily.map((a) => ({ a, h: mins(a.key, ws, addDays(ws, 6)) / 60, last: mins(a.key, addDays(ws, -7), addDays(ws, -1)) / 60 }))
+  const max = Math.max(1, ...week.map((w) => Math.max(w.h, w.a.target, w.last)))
   const daysIn = daysBetween(ws, today) + 1
+  const days = Array.from({ length: 7 }, (_, i) => addDays(today, -1 - i))
+  const others = areas.filter((a) => !isDaily(a)).map((a) => a.key)
   return (
     <section className="sub-panel span-2">
-      <h3>Where your time goes this week 本週時間 <span className="sub inline">from your evening check-ins · day {daysIn} of 7</span></h3>
+      <h3>Where your time went 時間分配 <span className="sub inline">from your Google Calendar records · day {daysIn} of 7 this week</span></h3>
+      {err && <p className="sub" role="alert">Could not load the time ledger: {err}</p>}
       <ul className="tbars">
-        {week.map((w, i) => {
-          const pace = w.area.target * (daysIn / 7)
-          const tone = w.hours >= w.area.target ? 'met' : w.hours >= pace * 0.8 ? 'ok' : 'low'
+        {week.map((w) => {
+          const tone = w.h >= w.a.target ? 'met' : w.h >= w.a.target * (daysIn / 7) * 0.8 ? 'ok' : 'low'
           return (
-            <li key={w.area.key}>
-              <span className="tb-name">{w.area.label} <span className="tc">{w.area.label_zh}</span></span>
+            <li key={w.a.key}>
+              <span className="tb-name">{w.a.label} <span className="tc">{w.a.label_zh}</span></span>
               <span className="tb-track">
-                <span className={`tb-fill ${tone}`} style={{ width: `${(w.hours / max) * 100}%` }} />
-                <span className="tb-target" style={{ left: `${(w.area.target / max) * 100}%` }} title={`Target ${w.area.target} h`} />
+                <span className={`tb-fill ${tone}`} style={{ width: `${(w.h / max) * 100}%` }} />
+                <span className="tb-target" style={{ left: `${(w.a.target / max) * 100}%` }} title={`Target ${w.a.target} h`} />
               </span>
-              <span className="tb-num">{w.hours} / {w.area.target} h<span className="sub">last week {last[i].hours} h</span></span>
+              <span className="tb-num">{Math.round(w.h * 4) / 4} / {w.a.target} h<span className="sub">last week {Math.round(w.last * 4) / 4} h</span></span>
             </li>
           )
         })}
       </ul>
-      <p className="sub">Bar: hours this week. Line: your weekly target. Amber means behind pace for this point in the week.</p>
+      <div className="tbl-wrap"><table className="tbl">
+        <thead><tr><th>Day</th>{daily.map((a) => <th key={a.key} className="n">{a.label}</th>)}<th className="n">Other work</th><th className="n">Total</th></tr></thead>
+        <tbody>{days.map((d) => {
+          const day = entries.filter((e) => e.day === d)
+          const tot = day.reduce((s, e) => s + e.minutes, 0)
+          return (
+            <tr key={d} className={tot ? '' : 'muted'}>
+              <td>{shortDay(d)}</td>
+              {daily.map((a) => <td key={a.key} className="n">{fmtH(day.filter((e) => e.category === a.key).reduce((s, e) => s + e.minutes, 0))}</td>)}
+              <td className="n">{fmtH(day.filter((e) => others.includes(e.category) || !areas.some((a) => a.key === e.category)).reduce((s, e) => s + e.minutes, 0))}</td>
+              <td className="n">{tot ? fmtH(tot) : 'not recorded'}</td>
+            </tr>
+          )
+        })}</tbody>
+      </table></div>
+      <p className="sub">Bar: hours this week. Line: your weekly target. Only one-off calendar events count; repeating events are plans. Yesterday is read each morning.</p>
     </section>
+  )
+}
+
+/** Work that comes every few weeks: when it was last done and when it is next likely due. */
+function Periodic({ areas, entries, today }: { areas: Area[]; entries: TimeEntry[]; today: string }) {
+  const list = areas.filter((a) => a.kind === 'periodic')
+  if (!list.length) return null
+  return (
+    <section className="sub-panel span-2">
+      <h3>Periodic work 定期工作 <span className="sub inline">not daily: shown by when it was last done</span></h3>
+      <ul className="kv">
+        {list.map((a) => {
+          const mine = entries.filter((e) => e.category === a.key)
+          const last = mine.length ? mine.reduce((m, e) => (e.day > m ? e.day : m), mine[0].day) : null
+          const every = a.every_days ?? 30
+          const next = last ? addDays(last, every) : null
+          const cycle = mine.filter((e) => e.day > addDays(today, -every)).reduce((s, e) => s + e.minutes, 0)
+          const freq = every <= 16 ? 'every 2 weeks' : every <= 45 ? 'about monthly' : 'twice a semester'
+          return (
+            <li key={a.key}>
+              <span>{a.label} <span className="tc">{a.label_zh}</span><span className="sub">{freq}{cycle ? ` · ${fmtH(cycle)} in the last ${every} days` : ''}</span></span>
+              <b className={next && next < today ? 'tone-soon' : ''}>{last ? `last ${shortDay(last)}` : 'not recorded yet'}{next ? ` · next about ${shortDay(next)}` : ''}</b>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+const LEDGER_PAGE = 100
+
+/** Every recorded activity, newest first, with a category that can be changed. */
+function TimeLedger({ areas, entries, today, onDone }: { areas: Area[]; entries: TimeEntry[]; today: string; onDone: () => void }) {
+  const months = [...new Set(entries.map((e) => e.day.slice(0, 7)))].sort().reverse()
+  const [month, setMonth] = useState('')
+  const [cat, setCat] = useState('')
+  const [q, setQ] = useState('')
+  const [limit, setLimit] = useState(LEDGER_PAGE)
+  const words = q.trim().toLowerCase()
+  const shown = entries.filter((e) => (!month || e.day.startsWith(month)) && (!cat || (cat === '_check' ? !e.reviewed : e.category === cat)) && (!words || e.title.toLowerCase().includes(words)))
+    .sort((a, b) => b.start_at.localeCompare(a.start_at))
+  const total = shown.reduce((s, e) => s + e.minutes, 0)
+  const toCheck = entries.filter((e) => !e.reviewed).length
+  return (
+    <section className="sub-panel span-2">
+      <h3>Time ledger 時間記錄 <span className="sub inline">{entries.length} activities recorded{entries.length ? ` since ${shortDay(entries[0].day)}` : ''}</span></h3>
+      <p className="sub">Each one-off event in your Google Calendar is recorded here the next morning, with a best-guess category. Change the category of any entry; the next reading never changes it back. Entries marked &quot;to check&quot; were planned ahead or are a guess.</p>
+      <div className="fin-filters">
+        <label>Month <select className="fin-year" value={month} onChange={(e) => { setMonth(e.target.value); setLimit(LEDGER_PAGE) }}><option value="">All months</option>{months.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+        <label>Category <select className="fin-year" value={cat} onChange={(e) => { setCat(e.target.value); setLimit(LEDGER_PAGE) }}><option value="">All</option>{toCheck > 0 && <option value="_check">To check ({toCheck})</option>}{areas.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}</select></label>
+        <label>Search <input className="fin-year" type="search" value={q} placeholder="Activity" onChange={(e) => { setQ(e.target.value); setLimit(LEDGER_PAGE) }} /></label>
+        <span className="sub">{shown.length} entries · {fmtH(total)}</span>
+      </div>
+      {shown.length ? (
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>When</th><th>Activity</th><th className="n">Time</th><th>Category</th><th /></tr></thead>
+          <tbody>{shown.slice(0, limit).map((e) => <LedgerRow key={`${e.id}|${e.category}|${e.reviewed}`} e={e} areas={areas} entries={entries} onDone={onDone} />)}</tbody>
+        </table></div>
+      ) : <p className="sub">{entries.length ? 'No entries match.' : `Nothing recorded yet. Add what you did today to Google Calendar; it is read tomorrow morning (${shortDay(addDays(today, 1))}).`}</p>}
+      {shown.length > limit && <button type="button" className="btn" onClick={() => setLimit(limit + LEDGER_PAGE)}>Show more ({shown.length - limit} left)</button>}
+    </section>
+  )
+}
+
+function LedgerRow({ e, areas, entries, onDone }: { e: TimeEntry; areas: Area[]; entries: TimeEntry[]; onDone: () => void }) {
+  const [v, setV] = useState(e.category)
+  const [all, setAll] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const same = entries.filter((x) => x.id !== e.id && x.title.toLowerCase() === e.title.toLowerCase())
+  const changed = v !== e.category || !e.reviewed
+  const t = (iso: string) => new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Vancouver' })
+  const save = async () => {
+    setMsg('Saving…')
+    try { await updateTimeEntries([e.id, ...(all ? same.map((x) => x.id) : [])], { category: v, reviewed: true }); setMsg(null); onDone() } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) }
+  }
+  return (
+    <tr>
+      <td className="mono">{shortDay(e.day)}<span className="sub">{t(e.start_at)} to {t(e.end_at)}</span></td>
+      <td>{e.title}{!e.reviewed && <span className="sub">to check</span>}</td>
+      <td className="n">{fmtH(e.minutes)}</td>
+      <td>
+        <select className="fin-cat" value={v} onChange={(ev) => setV(ev.target.value)} aria-label={`Category for ${e.title} on ${e.day}`}>
+          {!areas.some((a) => a.key === v) && <option value={v}>{v}</option>}
+          {areas.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+        </select>
+        {same.length > 0 && changed && <label className="sub fin-similar"><input type="checkbox" checked={all} onChange={(ev) => setAll(ev.target.checked)} /> Also the {same.length} other &quot;{e.title}&quot;</label>}
+        {msg && <span className="sub" role="status">{msg}</span>}
+      </td>
+      <td>{changed && <button type="button" className="act" onClick={save}>{v === e.category ? 'Confirm' : 'Save'}</button>}</td>
+    </tr>
   )
 }
 
@@ -588,6 +695,12 @@ export function MePage({ settings, checkins, calendar, onReload, onSaveSettings,
   lang: Lang
 }) {
   const today = vanDate()
+  const [entries, setEntries] = useState<TimeEntry[]>([])
+  const [entriesErr, setEntriesErr] = useState<string | null>(null)
+  const reloadEntries = () => { loadTimeEntries(addDays(today, -400)).then((e) => { setEntries(e); setEntriesErr(null) }).catch((e: Error) => setEntriesErr(e.message)) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { reloadEntries() }, [])
+  const ledger = useMemo(() => ledgerOf(entries), [entries])
   const [which, setWhich] = useState<'today' | 'yesterday'>('today')
   const day = which === 'today' ? today : addDays(today, -1)
   const byDay = useMemo(() => new Map(checkins.map((c) => [c.day, c])), [checkins])
@@ -606,7 +719,7 @@ export function MePage({ settings, checkins, calendar, onReload, onSaveSettings,
   const busy = which === 'today' ? busyDay(calendar) : { busy: false, why: '' }
 
   const morning = <Morning key={`m-${day}`} day={day} c={c} prev={prev} habits={habits} focusKey={focusKey} busy={busy} onSaved={onReload} />
-  const evening = <Evening key={`e-${day}`} day={day} c={c} habits={habits} areas={areas} focusKey={focusKey} busy={busy} experiments={experiments} onSaved={onReload} byDay={byDay} />
+  const evening = <Evening key={`e-${day}`} day={day} c={c} habits={habits} focusKey={focusKey} busy={busy} experiments={experiments} onSaved={onReload} byDay={byDay} ledger={ledger} />
 
   return (
     <main className="detail me">
@@ -622,16 +735,18 @@ export function MePage({ settings, checkins, calendar, onReload, onSaveSettings,
       </div>
       <div className="detail-grid">
         {eveningFirst ? <>{evening}{morning}</> : <>{morning}{evening}</>}
-        <Habits habits={habits} byDay={byDay} today={today} lang={lang} focus={focusKey ? focus : null} onFocus={(key) => onSaveSettings({ focus: { key, since: today } })} />
+        <Habits habits={habits} byDay={byDay} today={today} lang={lang} focus={focusKey ? focus : null} onFocus={(key) => onSaveSettings({ focus: { key, since: today } })} ledger={ledger} />
         <SleepRecord habits={habits} byDay={byDay} today={today} onSaveHabits={(rows) => onSaveSettings({ habits: rows })} />
-        <Evidence habits={habits} checkins={checkins} today={today} lang={lang} />
+        <Evidence habits={habits} checkins={checkins} today={today} lang={lang} ledger={ledger} />
         <Experiments list={experiments} checkins={checkins} today={today} lang={lang} onSave={(rows) => onSaveSettings({ experiments: rows })} />
-        <TimeBars areas={areas} checkins={checkins} today={today} />
+        <TimeView areas={areas} entries={entries} today={today} err={entriesErr} />
+        <Periodic areas={areas} entries={entries} today={today} />
+        <TimeLedger areas={areas} entries={entries} today={today} onDone={reloadEntries} />
         <details className="sub-panel span-2 settings-box">
           <summary>Edit habits, life areas and targets 修改習慣及目標</summary>
           <div className="detail-grid">
             <HabitEditor rows={habits} onSave={(rows) => onSaveSettings({ habits: rows })} />
-            <EditList title="Life areas 生活範疇" rows={areas} numKey="target" numLabel="Hours a week" onSave={(rows) => onSaveSettings({ areas: rows })} />
+            <EditList title="Life areas 生活範疇 (weekly hours matter for daily areas only)" rows={areas} numKey="target" numLabel="Hours a week" onSave={(rows) => onSaveSettings({ areas: rows })} />
           </div>
         </details>
       </div>

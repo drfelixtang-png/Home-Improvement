@@ -593,3 +593,5 @@ ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
 .habit-edit-grid input { font: inherit; font-size: 0.88rem; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0; }
 .habit-edit-grid .fin-year { margin-left: 0; }
 .habit-edit-grid .wide { grid-column: 1 / -1; }
+.cal-log { gap: 6px; }
+.cal-log .btn { align-self: flex-start; }

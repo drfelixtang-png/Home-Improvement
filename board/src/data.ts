@@ -170,7 +170,12 @@ export interface BoardSettings {
 }
 
 /** A life area, with the hours a week the owner wants to give it. */
-export interface Area { key: string; label: string; label_zh: string; target: number }
+export interface Area {
+  key: string; label: string; label_zh: string
+  target: number // hours a week (daily areas)
+  kind?: 'daily' | 'periodic' | 'other' // periodic: work that comes every few weeks, shown with when it was last done
+  every_days?: number // periodic: about how often, in days (14, 30, or about 120 for twice a semester)
+}
 /** A habit and how many days a week it should happen (7 = every day). */
 export interface Habit {
   key: string; label: string; label_zh: string
@@ -178,7 +183,8 @@ export interface Habit {
   every?: 'day' | 'week' // 'week': checked as a weekly target (for example, see a friend once a week)
   // Filled in from the next morning's check-in, with no evening tick box:
   // 'winddown' started winding down by `by`; 'wake' woke up near the usual time; 'bedtime' (older) in bed by `by`.
-  auto?: 'bedtime' | 'winddown' | 'wake'
+  auto?: 'bedtime' | 'winddown' | 'wake' | 'log' // 'log': the day has activity recorded in the calendar
+  match?: string // words (separated by |) in a calendar entry title that count as doing this habit
   by?: string // 'HH:MM' (after midnight is fine, e.g. '00:30'); for 'wake', the starting usual time
   tiny?: string; tiny_zh?: string // the smallest version that still counts
   anchor?: 'am' | 'pm' // shown with the morning or the evening check-in

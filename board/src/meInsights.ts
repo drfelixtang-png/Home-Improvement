@@ -1,8 +1,8 @@
 // Personal evidence for the Me page: what the check-ins show about habits, red wine, wind-down
 // and wake-up, plus busy days from the calendar and the results of two-week experiments.
 import type { CalEvent, Experiment, ExpMeasure, Habit } from './data'
-import type { Checkin } from './me'
-import { addDays, avg, daysBetween, fromLateness, habitStatus, lateness } from './me'
+import type { Checkin, Ledger } from './me'
+import { addDays, avg, daysBetween, fromLateness, habitStatus, lateness, titleHas } from './me'
 
 export interface Finding { text: string; text_zh: string; strength: number }
 export interface Pending { text: string; text_zh: string }
@@ -39,15 +39,16 @@ function compare(m: ExpMeasure, yes: number[], no: number[]): { a: number; b: nu
 }
 
 /** What the last 120 days of check-ins show. Only comparisons with enough days on each side. */
-export function findings(habits: Habit[], checkins: Checkin[], today: string): { found: Finding[]; waiting: Pending[] } {
+export function findings(habits: Habit[], checkins: Checkin[], today: string, ledger?: Ledger): { found: Finding[]; waiting: Pending[] } {
   const byDay = new Map(checkins.map((c) => [c.day, c]))
   const found: Finding[] = []
   const waiting: Pending[] = []
   const days = checkins.map((c) => c.day).filter((d) => d < today)
 
   for (const h of habits.filter((x) => !x.auto)) {
-    const done = days.filter((d) => byDay.get(d)?.evening_at && byDay.get(d)?.habits[h.key])
-    const not = days.filter((d) => byDay.get(d)?.evening_at && !byDay.get(d)?.habits[h.key])
+    const did = (d: string) => !!byDay.get(d)?.habits[h.key] || (ledger?.get(d) ?? []).some((t) => titleHas(t, h.match))
+    const done = days.filter((d) => byDay.get(d)?.evening_at && did(d))
+    const not = days.filter((d) => byDay.get(d)?.evening_at && !did(d))
     let any = false
     for (const m of ['energy_pm', 'mood_pm', 'sleep_quality'] as ExpMeasure[]) {
       const r = compare(m, done.map((d) => measureOf(m, d, byDay)).filter((x): x is number => x !== null), not.map((d) => measureOf(m, d, byDay)).filter((x): x is number => x !== null))
@@ -85,7 +86,7 @@ export function findings(habits: Habit[], checkins: Checkin[], today: string): {
 
   // Winding down on time, and waking at the usual time.
   for (const h of habits.filter((x) => x.auto === 'winddown' || x.auto === 'wake')) {
-    const s = habitStatus(h, byDay, today)
+    const s = habitStatus(h, byDay, today, ledger)
     const m: ExpMeasure = h.auto === 'winddown' ? 'sleep_quality' : 'energy_am'
     const yes: number[] = [], no: number[] = []
     for (const g of s.grid) {
