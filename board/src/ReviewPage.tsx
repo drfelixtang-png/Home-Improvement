@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { BoardSettings } from './data'
-import type { Checkin, Review } from './me'
-import { addDays, avg, habitStatus, hoursByArea, vanDate, weekStart } from './me'
+import type { Checkin, Review, TimeEntry } from './me'
+import { addDays, avg, habitStatus, hoursByArea, ledgerOf, loadTimeEntries, vanDate, weekStart } from './me'
 import { shortDate } from './format'
 
 type Lang = 'zh' | 'en'
@@ -60,6 +60,9 @@ export function ReviewPage({ settings, checkins, reviews, lang }: { settings: Bo
   const ws = weekStart(today)
   const lastWs = addDays(ws, -7)
   const byDay = useMemo(() => new Map(checkins.map((c) => [c.day, c])), [checkins])
+  const [entries, setEntries] = useState<TimeEntry[]>([])
+  useEffect(() => { loadTimeEntries(addDays(vanDate(), -60)).then(setEntries).catch(() => setEntries([])) }, [])
+  const ledger = useMemo(() => ledgerOf(entries), [entries])
 
   const weekStats = (from: string) => {
     const to = addDays(from, 6)
@@ -78,7 +81,7 @@ export function ReviewPage({ settings, checkins, reviews, lang }: { settings: Bo
   }
   const tw = weekStats(ws)
   const lw = weekStats(lastWs)
-  const hours = hoursByArea(settings.areas ?? [], checkins, ws, addDays(ws, 6))
+  const hours = hoursByArea((settings.areas ?? []).filter((a) => !a.kind || a.kind === 'daily'), checkins, ws, addDays(ws, 6), entries)
   const recent = [...checkins].filter((c) => c.day >= addDays(today, -13)).reverse()
   const latest = reviews[0]
 
@@ -122,7 +125,7 @@ export function ReviewPage({ settings, checkins, reviews, lang }: { settings: Bo
           <h3>Habits and time this week 本週習慣及時間</h3>
           <ul className="kv">
             {(settings.habits ?? []).map((h) => {
-              const s = habitStatus(h, byDay, today)
+              const s = habitStatus(h, byDay, today, ledger)
               return <li key={h.key}><span>{h.label} <span className="tc">{h.label_zh}</span></span><b>{s.thisWeek}/{h.per_week >= 7 ? 7 : h.per_week}</b></li>
             })}
             {hours.map((h) => <li key={h.area.key}><span>{h.area.label} <span className="tc">{h.area.label_zh}</span></span><b>{h.hours}/{h.area.target} h</b></li>)}

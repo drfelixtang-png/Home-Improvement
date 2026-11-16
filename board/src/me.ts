@@ -48,6 +48,43 @@ export async function saveCheckin(day: string, patch: Partial<Checkin>): Promise
   if (error) throw error
 }
 
+// ------------------------------------------------------------------ time ledger
+// Recorded each morning from the one-off (not repeating) events in Google Calendar.
+export interface TimeEntry {
+  id: string; day: string; start_at: string; end_at: string; minutes: number
+  title: string; category: string; source: string; reviewed: boolean; note: string
+}
+
+export async function loadTimeEntries(fromDay: string): Promise<TimeEntry[]> {
+  const out: TimeEntry[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase.from('time_entries').select('id, day, start_at, end_at, minutes, title, category, source, reviewed, note')
+      .gte('day', fromDay).order('start_at').order('id').range(from, from + 999)
+    if (error) throw error
+    out.push(...((data ?? []) as TimeEntry[]))
+    if (!data || data.length < 1000) return out
+  }
+}
+
+export async function updateTimeEntries(ids: string[], patch: Partial<Pick<TimeEntry, 'category' | 'reviewed' | 'note'>>): Promise<void> {
+  const { error } = await supabase.from('time_entries').update(patch).in('id', ids)
+  if (error) throw error
+}
+
+/** Whether a calendar title has one of the habit words, matched at the start of a word ("run" is not "brunch"). */
+export const titleHas = (title: string, match: string | undefined): boolean => {
+  const words = (match ?? '').toLowerCase().split('|').map((w) => w.trim()).filter(Boolean)
+  return words.some((w) => new RegExp(`(^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(title.toLowerCase()))
+}
+
+/** Days with calendar records, and the titles recorded each day (lower case), for habits. */
+export type Ledger = Map<string, string[]>
+export const ledgerOf = (entries: TimeEntry[]): Ledger => {
+  const m: Ledger = new Map()
+  for (const e of entries) m.set(e.day, [...(m.get(e.day) ?? []), e.title.toLowerCase()])
+  return m
+}
+
 // ------------------------------------------------------------------ weekly reviews (written by Claude)
 export interface Review {
   week_start: string
@@ -127,8 +164,15 @@ export function windDownWeek(habit: Habit, byDay: Map<string, Checkin>, today: s
   return { met: xs.filter((x) => lateness(x) <= goal).length, recorded: xs.length, usual: m === null ? null : fromLateness(Math.round(m / 15) * 15) }
 }
 
-export function habitStatus(habit: Habit, byDay: Map<string, Checkin>, today: string): HabitStatus {
+export function habitStatus(habit: Habit, byDay: Map<string, Checkin>, today: string, ledger?: Ledger): HabitStatus {
+  // A calendar entry whose title has one of the habit's words counts as the full version.
+  const inCalendar = (day: string) => !!ledger && !!habit.match && (ledger.get(day) ?? []).some((t) => titleHas(t, habit.match))
   const markOf = (day: string): DayMark => {
+    if (habit.auto === 'log') {
+      if (ledger?.has(day)) return 'done'
+      // Yesterday's calendar is read the next morning, so today and yesterday may still be pending.
+      return day >= addDays(today, -1) ? 'today' : ledger ? 'missed' : 'unknown'
+    }
     if (habit.auto === 'bedtime' || habit.auto === 'winddown') {
       // The night of `day` is recorded in the next morning's check-in.
       const next = byDay.get(addDays(day, 1))
@@ -145,8 +189,8 @@ export function habitStatus(habit: Habit, byDay: Map<string, Checkin>, today: st
     }
     const c = byDay.get(day)
     const v = c?.habits[habit.key]
+    if (v === true || inCalendar(day)) return 'done'
     if (v === 'tiny') return 'tiny'
-    if (v) return 'done'
     if (day === today) return 'today'
     if (!c?.evening_at) return 'unknown'
     return 'missed'
@@ -190,10 +234,12 @@ export function habitStatus(habit: Habit, byDay: Map<string, Checkin>, today: st
 }
 
 // ------------------------------------------------------------------ time by life area
-export function hoursByArea(areas: Area[], checkins: Checkin[], from: string, to: string): { area: Area; hours: number }[] {
+export function hoursByArea(areas: Area[], checkins: Checkin[], from: string, to: string, entries?: TimeEntry[]): { area: Area; hours: number }[] {
+  // From the time ledger when there is one; older records came from the evening check-in.
   return areas.map((area) => ({
     area,
-    hours: checkins.filter((c) => c.day >= from && c.day <= to).reduce((s, c) => s + (Number(c.hours[area.key]) || 0), 0),
+    hours: Math.round(((entries ?? []).filter((e) => e.day >= from && e.day <= to && e.category === area.key).reduce((s, e) => s + e.minutes, 0) / 60
+      + checkins.filter((c) => c.day >= from && c.day <= to).reduce((s, c) => s + (Number(c.hours[area.key]) || 0), 0)) * 4) / 4,
   }))
 }
 
