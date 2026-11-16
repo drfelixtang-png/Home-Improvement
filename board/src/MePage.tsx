@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import type { Area, BoardSettings, CalEvent, Experiment, ExpMeasure, Focus, Habit } from './data'
 import type { Checkin, HabitStatus, Ledger, TimeEntry } from './me'
 import { addDays, daysBetween, ledgerOf, loadTimeEntries, updateTimeEntries, emptyCheckin, fromLateness, habitStatus, lateness, saveCheckin, sleepFrom, slugKey, usualWake, vanDate, vanHour, weekStart, windDownWeek } from './me'
-import { busyDay, EXP_IDEAS, experimentResult, expKey, findings, MEASURES } from './meInsights'
+import { busyDay, EXP_IDEAS, experimentResult, findings, MEASURES } from './meInsights'
 
 type Lang = 'zh' | 'en'
 
@@ -63,62 +63,47 @@ function SaveRow({ msg }: { msg: string | null }) {
   return <div className="form-row"><button type="submit" className="btn">Save 儲存</button>{msg && <span className="sub" role="status">{msg}</span>}</div>
 }
 
-// ================================================================= small steps
-type Step = boolean | 'tiny' | undefined
-const stepLabel = (v: Step) => (v === 'tiny' ? 'tiny' : v ? 'full' : 'not yet')
-
-/** Not yet / Tiny / Full: both tiny and full count as done. */
-function StepPick({ h, value, onChange }: { h: Habit; value: Step; onChange: (v: Step) => void }) {
-  const opts: { v: Step; en: string; zh: string }[] = [{ v: undefined, en: 'Not today', zh: '今日未做' }, { v: 'tiny', en: 'Tiny', zh: '小步' }, { v: true, en: 'Full', zh: '完整' }]
-  return (
-    <span className="step-pick" role="group" aria-label={`${h.label}: ${stepLabel(value)}`}>
-      {opts.map((o) => {
-        const on = (o.v ?? false) === (value ?? false)
-        return <button key={o.en} type="button" className={on ? `on ${o.v === 'tiny' ? 'tiny' : o.v ? 'full' : ''}` : ''} aria-pressed={on} onClick={() => onChange(o.v)}>{o.en} <span className="tc">{o.zh}</span></button>
-      })}
-    </span>
-  )
-}
-
-function HabitLine({ h, focus }: { h: Habit; focus: boolean }) {
-  return (
-    <span className="hl">
-      <span className="hl-name">{focus && <span className="focus-chip">Focus 重點</span>}{h.label} <span className="tc">{h.label_zh}</span></span>
-      {(h.after || h.tiny) && <span className="sub">{h.after ? `${h.after}: ` : ''}{h.tiny ? <>tiny version <b>{h.tiny}</b></> : null}</span>}
-      {h.treat && <span className="sub">Pair it with: {h.treat}</span>}
-    </span>
-  )
-}
+// ================================================================= calendar reminder
+// Google Calendar is the one record of what was done: habits, time and experiments all come from it.
+const firstWord = (m?: string) => (m ?? '').split('|').map((w) => w.trim()).filter(Boolean)[0] ?? ''
 
 function BusyNote({ busy }: { busy: { busy: boolean; why: string } }) {
   if (!busy.busy) return null
   return <p className="busy-note">Busy day ({busy.why}). The tiny versions are enough today, and they still count. <span className="tc">今日較忙，做小步已足夠，一樣算數。</span></p>
 }
 
-/** Morning: habits that follow the morning check-in, saved as soon as they are ticked. */
-function MorningSteps({ day, c, habits, focusKey, onSaved }: { day: string; c: Checkin; habits: Habit[]; focusKey: string | null; onSaved: () => void }) {
-  const list = habits.filter((h) => !h.auto && h.anchor === 'am')
-  const [msg, setMsg] = useState<string | null>(null)
-  if (!list.length) return null
-  const set = async (h: Habit, v: Step) => {
-    setMsg('Saving…')
-    const next = { ...c.habits }
-    if (v) next[h.key] = v; else delete next[h.key]
-    try { await saveCheckin(day, { habits: next }); setMsg(null); onSaved() } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) }
-  }
+function CalendarCard({ when, day, habits, focusKey, experiments, ledger }: { when: 'am' | 'pm'; day: string; habits: Habit[]; focusKey: string | null; experiments: Experiment[]; ledger: Ledger }) {
+  const target = when === 'am' ? addDays(day, -1) : day
+  const recorded = ledger.has(target)
+  const list = habits.filter((h) => !h.auto && h.match).sort((a, b) => (a.key === focusKey ? -1 : b.key === focusKey ? 1 : 0))
+  const running = experiments.filter((e) => !e.stopped && e.match && day >= e.start && day <= addDays(e.start, e.days - 1))
   return (
-    <div className="field">
-      <span className="field-l">Small steps this morning 今朝小步</span>
-      <ul className="step-list">
-        {list.map((h) => <li key={h.key}><HabitLine h={h} focus={h.key === focusKey} /><StepPick h={h} value={c.habits[h.key]} onChange={(v) => set(h, v)} /></li>)}
-      </ul>
-      {msg && <span className="sub" role="status">{msg}</span>}
+    <div className="field cal-log">
+      <span className="field-l">{when === 'am' ? 'Is yesterday complete in Google Calendar? 昨日的日曆記錄齊全嗎' : 'Record today in Google Calendar 在日曆記錄今日'}</span>
+      <span className="sub">
+        {when === 'am'
+          ? `Add anything you did yesterday that is not there yet, as one-off events. ${recorded ? 'Yesterday already has records in your ledger; anything added now is picked up tomorrow morning.' : 'The last 3 days are read again each morning, so it is not too late.'}`
+          : 'Add what you actually did today as one-off events, on top of any planned ones. The tiny version: the main 2 or 3 things. It is read into your time ledger tomorrow morning.'}
+      </span>
+      {list.length > 0 && (
+        <ul className="cal-words">
+          {list.map((h) => (
+            <li key={h.key}>
+              {h.key === focusKey && <span className="focus-chip">Focus 重點</span>}
+              <b>{h.label}</b> <span className="tc">{h.label_zh}</span>: put <q>{firstWord(h.match)}</q> in the title
+              <span className="sub">{h.tiny ? `Tiny: ${h.tiny}` : ''}{h.full_minutes ? ` · full version from ${h.full_minutes} minutes` : ''}{h.after ? ` · ${h.after}` : ''}</span>
+            </li>
+          ))}
+          {running.map((e) => <li key={e.key}><b>Experiment:</b> {e.action}: put <q>{firstWord(e.match)}</q> in the title</li>)}
+        </ul>
+      )}
+      <a className="btn ghost" href={`https://calendar.google.com/calendar/r/day/${target.replace(/-/g, '/')}`} target="_blank" rel="noreferrer">{when === 'am' ? 'Open yesterday 開啟昨日' : 'Open today 開啟今日'}</a>
     </div>
   )
 }
 
 // ================================================================= morning
-function Morning({ day, c, prev, habits, focusKey, busy, onSaved }: { day: string; c: Checkin; prev: Checkin | undefined; habits: Habit[]; focusKey: string | null; busy: { busy: boolean; why: string }; onSaved: () => void }) {
+function Morning({ day, c, prev, habits, focusKey, busy, experiments, ledger, onSaved }: { day: string; c: Checkin; prev: Checkin | undefined; habits: Habit[]; focusKey: string | null; busy: { busy: boolean; why: string }; experiments: Experiment[]; ledger: Ledger; onSaved: () => void }) {
   const [f, setF] = useState(c)
   const [msg, setMsg] = useState<string | null>(null)
   const pr = [...f.priorities, '', '', ''].slice(0, 3)
@@ -139,6 +124,7 @@ function Morning({ day, c, prev, habits, focusKey, busy, onSaved }: { day: strin
     <form className="ci-card" onSubmit={submit}>
       <h3>Morning check-in <span className="tc">早上記錄</span>{c.morning_at && <span className="done-chip">Done ✓</span>}</h3>
       <BusyNote busy={busy} />
+      <CalendarCard when="am" day={day} habits={habits} focusKey={focusKey} experiments={experiments} ledger={ledger} />
       {prev?.better_tomorrow && <p className="carry"><span className="lbl">Yesterday you said 昨日的 0.1%</span>{prev.better_tomorrow}</p>}
       <div className="field">
         <span className="field-l">Last night 昨晚 <span className="sub inline">a record, not a test</span></span>
@@ -166,39 +152,26 @@ function Morning({ day, c, prev, habits, focusKey, busy, onSaved }: { day: strin
         <input id="mnote" value={f.morning_note} onChange={(e) => setF({ ...f, morning_note: e.target.value })} placeholder="Anything on your mind" />
       </div>
       <SaveRow msg={msg} />
-      <MorningSteps day={day} c={c} habits={habits} focusKey={focusKey} onSaved={onSaved} />
     </form>
   )
 }
 
 // ================================================================= evening
-function Evening({ day, c, habits, focusKey, busy, experiments, onSaved, byDay, ledger }: {
-  day: string; c: Checkin; habits: Habit[]; focusKey: string | null; busy: { busy: boolean; why: string }; experiments: Experiment[]; onSaved: () => void; byDay: Map<string, Checkin>; ledger: Ledger
+function Evening({ day, c, habits, focusKey, busy, experiments, onSaved, ledger }: {
+  day: string; c: Checkin; habits: Habit[]; focusKey: string | null; busy: { busy: boolean; why: string }; experiments: Experiment[]; onSaved: () => void; ledger: Ledger
 }) {
-  const weekDone = (h: Habit) => Array.from({ length: 7 }, (_, k) => addDays(weekStart(day), k)).filter((d) => d < day && byDay.get(d)?.habits[h.key]).length
   const [f, setF] = useState(c)
   const [msg, setMsg] = useState<string | null>(null)
   const pri = f.priorities.filter((p) => p.trim())
-  // Only the steps changed here are saved over the latest record, so a step ticked in the morning is kept.
-  const [edits, setEdits] = useState<Record<string, Step>>({})
-  const stepOf = (key: string): Step => (key in edits ? edits[key] : c.habits[key])
-  const setStep = (key: string, v: Step) => setEdits({ ...edits, [key]: v })
-  const merged = () => { const n = { ...c.habits }; for (const [k, v] of Object.entries(edits)) { if (v) n[k] = v; else delete n[k] } return n }
-  // The focus habit first, then evening habits, then the rest. Morning habits are ticked in the morning but can be changed here.
-  const rank = (h: Habit) => (h.key === focusKey ? 0 : h.anchor === 'pm' ? 1 : h.anchor === 'am' ? 3 : 2)
-  const list = habits.filter((h) => !h.auto).sort((a, b) => rank(a) - rank(b))
-  const fromCal = (h: Habit) => !c.habits[h.key] && habitStatus(h, byDay, day, ledger).grid.find((g) => g.day === day)?.mark === 'done'
-  const running = experiments.filter((e) => !e.stopped && day >= e.start && day <= addDays(e.start, e.days - 1))
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setMsg('Saving…')
     try {
       await saveCheckin(day, {
-        energy_pm: f.energy_pm, mood_pm: f.mood_pm, priorities_done: f.priorities_done, habits: merged(), hours: f.hours,
+        energy_pm: f.energy_pm, mood_pm: f.mood_pm, priorities_done: f.priorities_done,
         win: f.win, slipped: f.slipped, better_tomorrow: f.better_tomorrow, evening_note: f.evening_note, evening_at: new Date().toISOString(),
       })
       setMsg('Saved 已儲存')
-      setEdits({})
       onSaved()
     } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) }
   }
@@ -215,32 +188,7 @@ function Evening({ day, c, habits, focusKey, busy, experiments, onSaved, byDay, 
           ) : null)}
         </fieldset>
       )}
-      <fieldset className="field">
-        <legend className="field-l">Small steps today 今日小步 <span className="sub inline">the tiny version counts</span></legend>
-        <ul className="step-list">
-          {list.map((h) => (
-            <li key={h.key}>
-              <HabitLine h={h} focus={h.key === focusKey} />
-              {h.every === 'week' && <span className="sub">This week {weekDone(h) + (stepOf(h.key) ? 1 : 0)}/{Math.max(1, h.per_week)}</span>}
-              {fromCal(h) && !(h.key in edits) ? <span className="sub">Done, from your calendar ✓</span> : <StepPick h={h} value={stepOf(h.key)} onChange={(v) => setStep(h.key, v)} />}
-            </li>
-          ))}
-        </ul>
-      </fieldset>
-      {running.length > 0 && (
-        <fieldset className="field">
-          <legend className="field-l">Experiments 小實驗</legend>
-          {running.map((e) => (
-            <label key={e.key} className="check"><input type="checkbox" checked={!!stepOf(expKey(e))} onChange={(ev) => setStep(expKey(e), ev.target.checked || undefined)} /> {e.action}
-              <span className="sub inline"> day {daysBetween(e.start, day) + 1} of {e.days}</span></label>
-          ))}
-        </fieldset>
-      )}
-      <div className="field cal-log">
-        <span className="field-l">Record the day in Google Calendar 在日曆記錄今日</span>
-        <span className="sub">Add what you actually did today as one-off events, on top of any planned ones (the tiny version: the main 2 or 3 things). It is read into your time ledger tomorrow morning.{ledger.has(addDays(day, -1)) ? ' Yesterday is recorded.' : ''}</span>
-        <a className="btn ghost" href={`https://calendar.google.com/calendar/r/day/${day.replace(/-/g, '/')}`} target="_blank" rel="noreferrer">Open Google Calendar 開啟日曆</a>
-      </div>
+      <CalendarCard when="pm" day={day} habits={habits} focusKey={focusKey} experiments={experiments} ledger={ledger} />
       <Rating id="epm" label="Energy this evening 精神" value={f.energy_pm} onChange={(v) => setF({ ...f, energy_pm: v })} low="Drained" high="Full" />
       <Rating id="mpm" label="Mood today overall 心情" value={f.mood_pm} onChange={(v) => setF({ ...f, mood_pm: v })} low="Low" high="Great" />
       <div className="field">
@@ -408,30 +356,31 @@ function Evidence({ habits, checkins, today, lang, ledger }: { habits: Habit[]; 
 }
 
 // ================================================================= experiments
-function Experiments({ list, checkins, today, lang, onSave }: { list: Experiment[]; checkins: Checkin[]; today: string; lang: Lang; onSave: (rows: Experiment[]) => Promise<void> }) {
+function Experiments({ list, checkins, today, lang, onSave, ledger }: { list: Experiment[]; checkins: Checkin[]; today: string; lang: Lang; onSave: (rows: Experiment[]) => Promise<void>; ledger: Ledger }) {
   const [q, setQ] = useState('')
   const [act, setAct] = useState('')
+  const [word, setWord] = useState('')
   const [m, setM] = useState<ExpMeasure>('sleep_quality')
   const [msg, setMsg] = useState<string | null>(null)
   const save = async (rows: Experiment[]) => { setMsg('Saving…'); try { await onSave(rows); setMsg(null) } catch (err) { setMsg(`Could not save: ${(err as Error).message}`) } }
   const start = async (e: FormEvent) => {
     e.preventDefault()
-    if (!act.trim()) return
-    await save([...list, { key: slugKey(act, list.map((x) => x.key)), question: q.trim() || act.trim(), action: act.trim(), measure: m, start: today, days: 14 }])
-    setQ(''); setAct('')
+    if (!act.trim() || !word.trim()) return
+    await save([...list, { key: slugKey(act, list.map((x) => x.key)), question: q.trim() || act.trim(), action: act.trim(), match: word.trim().toLowerCase(), measure: m, start: today, days: 14 }])
+    setQ(''); setAct(''); setWord('')
   }
   const sorted = [...list].sort((a, b) => b.start.localeCompare(a.start))
   return (
     <section className="sub-panel span-2">
-      <h3>Two-week experiments 兩週小實驗 <span className="sub inline">try something, tick it each evening, see what it does for you</span></h3>
+      <h3>Two-week experiments 兩週小實驗 <span className="sub inline">try something, record it in your calendar, see what it does for you</span></h3>
       {sorted.length ? (
         <ul className="exp-list">
           {sorted.map((e) => {
-            const r = experimentResult(e, checkins, today)
+            const r = experimentResult(e, checkins, today, ledger)
             return (
               <li key={e.key}>
                 <b>{e.question}</b>
-                <span className="sub">{e.action} · measured by {MEASURES[e.measure].label.toLowerCase()} · {r.ended ? `finished, done on ${r.did} days` : `day ${r.day} of ${e.days}, done on ${r.did} days`}</span>
+                <span className="sub">{e.action}{e.match ? ` · calendar title with "${e.match.split('|')[0]}"` : ''} · measured by {MEASURES[e.measure].label.toLowerCase()} · {r.ended ? `finished, done on ${r.did} days` : `day ${r.day} of ${e.days}, done on ${r.did} days`}</span>
                 <span>{lang === 'zh' ? r.text_zh : r.text}</span>
                 <span className="exp-act">
                   {!r.ended && <button type="button" className="act" onClick={() => save(list.map((x) => (x.key === e.key ? { ...x, stopped: today } : x)))}>Stop early</button>}
@@ -443,11 +392,12 @@ function Experiments({ list, checkins, today, lang, onSave }: { list: Experiment
         </ul>
       ) : <p className="sub">No experiments yet. Pick an idea below or write your own.</p>}
       <form className="exp-form" onSubmit={start}>
-        <div className="exp-ideas">{EXP_IDEAS.map((x) => <button key={x.action} type="button" className="btn ghost" onClick={() => { setQ(x.question); setAct(x.action); setM(x.measure) }}>{x.question}</button>)}</div>
+        <div className="exp-ideas">{EXP_IDEAS.map((x) => <button key={x.action} type="button" className="btn ghost" onClick={() => { setQ(x.question); setAct(x.action); setWord(x.match); setM(x.measure) }}>{x.question}</button>)}</div>
         <label>Question 問題<input value={q} onChange={(e) => setQ(e.target.value)} placeholder="What do you want to find out?" /></label>
         <label>What to do on the days you try it 要做甚麼<input value={act} onChange={(e) => setAct(e.target.value)} placeholder="For example: 10-minute walk outside after waking" /></label>
+        <label>Word to put in the calendar title on those days 日曆標題用字<input value={word} onChange={(e) => setWord(e.target.value)} placeholder="For example: morning walk" /></label>
         <label>Measure 量度<select className="fin-year" value={m} onChange={(e) => setM(e.target.value as ExpMeasure)}>{(Object.keys(MEASURES) as ExpMeasure[]).map((k) => <option key={k} value={k}>{MEASURES[k].label}</option>)}</select></label>
-        <div className="form-row"><button type="submit" className="btn" disabled={!act.trim()}>Start a 2-week experiment 開始</button>{msg && <span className="sub" role="status">{msg}</span>}</div>
+        <div className="form-row"><button type="submit" className="btn" disabled={!act.trim() || !word.trim()}>Start a 2-week experiment 開始</button>{msg && <span className="sub" role="status">{msg}</span>}</div>
       </form>
     </section>
   )
@@ -482,10 +432,11 @@ function HabitEditor({ rows, onSave }: { rows: Habit[]; onSave: (rows: Habit[]) 
             ) : (<>
               <label>How often<select className="fin-year" value={r.every === 'week' ? 'week' : 'day'} onChange={(e) => upd(i, { every: e.target.value as 'day' | 'week' })}><option value="day">Days a week</option><option value="week">Times a week, any days</option></select></label>
               <label>Number<input type="number" min={1} max={7} value={r.per_week} onChange={(e) => upd(i, { per_week: Number(e.target.value) })} /></label>
+              <label>Words in the calendar title (separate with |)<input value={r.match ?? ''} onChange={(e) => upd(i, { match: e.target.value })} placeholder="exercise|walk|gym" /></label>
+              <label>Minutes for the full version<input type="number" min={0} max={600} value={r.full_minutes ?? ''} onChange={(e) => upd(i, { full_minutes: e.target.value ? Number(e.target.value) : undefined })} placeholder="Any length counts as full" /></label>
               <label>Tiny version<input value={r.tiny ?? ''} onChange={(e) => upd(i, { tiny: e.target.value })} placeholder="Two minutes or less" /></label>
               <label>Tiny version, Chinese<input className="tc-text" value={r.tiny_zh ?? ''} onChange={(e) => upd(i, { tiny_zh: e.target.value })} /></label>
-              <label>Shown with<select className="fin-year" value={r.anchor ?? ''} onChange={(e) => upd(i, { anchor: (e.target.value || undefined) as Habit['anchor'] })}><option value="">Evening list only</option><option value="am">Morning check-in</option><option value="pm">Evening check-in</option></select></label>
-              <label>After which routine<input value={r.after ?? ''} onChange={(e) => upd(i, { after: e.target.value })} placeholder="After the morning check-in" /></label>
+                            <label>After which routine<input value={r.after ?? ''} onChange={(e) => upd(i, { after: e.target.value })} placeholder="After the morning check-in" /></label>
               <label>Pair it with<input value={r.treat ?? ''} onChange={(e) => upd(i, { treat: e.target.value })} placeholder="Something you enjoy" /></label>
             </>)}
             <label className="wide">Why it matters<input value={r.why ?? ''} onChange={(e) => upd(i, { why: e.target.value })} /></label>
@@ -718,8 +669,8 @@ export function MePage({ settings, checkins, calendar, onReload, onSaveSettings,
   const focusKey = focus && habits.some((h) => h.key === focus.key) ? focus.key : null
   const busy = which === 'today' ? busyDay(calendar) : { busy: false, why: '' }
 
-  const morning = <Morning key={`m-${day}`} day={day} c={c} prev={prev} habits={habits} focusKey={focusKey} busy={busy} onSaved={onReload} />
-  const evening = <Evening key={`e-${day}`} day={day} c={c} habits={habits} focusKey={focusKey} busy={busy} experiments={experiments} onSaved={onReload} byDay={byDay} ledger={ledger} />
+  const morning = <Morning key={`m-${day}`} day={day} c={c} prev={prev} habits={habits} focusKey={focusKey} busy={busy} experiments={experiments} ledger={ledger} onSaved={onReload} />
+  const evening = <Evening key={`e-${day}`} day={day} c={c} habits={habits} focusKey={focusKey} busy={busy} experiments={experiments} onSaved={onReload} ledger={ledger} />
 
   return (
     <main className="detail me">
@@ -738,7 +689,7 @@ export function MePage({ settings, checkins, calendar, onReload, onSaveSettings,
         <Habits habits={habits} byDay={byDay} today={today} lang={lang} focus={focusKey ? focus : null} onFocus={(key) => onSaveSettings({ focus: { key, since: today } })} ledger={ledger} />
         <SleepRecord habits={habits} byDay={byDay} today={today} onSaveHabits={(rows) => onSaveSettings({ habits: rows })} />
         <Evidence habits={habits} checkins={checkins} today={today} lang={lang} ledger={ledger} />
-        <Experiments list={experiments} checkins={checkins} today={today} lang={lang} onSave={(rows) => onSaveSettings({ experiments: rows })} />
+        <Experiments list={experiments} checkins={checkins} today={today} lang={lang} onSave={(rows) => onSaveSettings({ experiments: rows })} ledger={ledger} />
         <TimeView areas={areas} entries={entries} today={today} err={entriesErr} />
         <Periodic areas={areas} entries={entries} today={today} />
         <TimeLedger areas={areas} entries={entries} today={today} onDone={reloadEntries} />
