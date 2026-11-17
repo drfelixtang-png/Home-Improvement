@@ -597,6 +597,8 @@ ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
 .cal-log .btn { align-self: flex-start; }
 .cal-log { padding: 10px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--panel); }
 .cal-words { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.88rem; }
-.cal-words li { display: flex; flex-direction: column; }
-.cal-words li > b, .cal-words li > .focus-chip { display: inline; }
+.cal-words li { display: block; line-height: 1.5; }
+.cal-words li .focus-chip { display: inline-block; }
+.cal-words-line { margin: 2px 0; font-size: 0.88rem; }
+.cal-words-line q { font-family: var(--mono); color: var(--accent); }
 .cal-words q { font-family: var(--mono); color: var(--accent); }

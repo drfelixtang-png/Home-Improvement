@@ -83,20 +83,22 @@ function CalendarCard({ when, day, habits, focusKey, experiments, ledger }: { wh
       <span className="sub">
         {when === 'am'
           ? `Add anything you did yesterday that is not there yet, as one-off events. ${recorded ? 'Yesterday already has records in your ledger; anything added now is picked up tomorrow morning.' : 'The last 3 days are read again each morning, so it is not too late.'}`
-          : 'Add what you actually did today as one-off events, on top of any planned ones. The tiny version: the main 2 or 3 things. It is read into your time ledger tomorrow morning.'}
+          : 'Add what you actually did today as one-off events, on top of any planned ones. The tiny version: the main 2 or 3 things. Put the word shown below in the title so the habit counts. It is read into your time ledger tomorrow morning.'}
       </span>
-      {list.length > 0 && (
+      {list.length > 0 && (when === 'am' ? (
+        <p className="cal-words-line">Title words 標題用字: {[...list.map((h) => firstWord(h.match)), ...running.map((e) => firstWord(e.match))].map((w, i) => <span key={w + i}>{i > 0 && ' · '}<q>{w}</q></span>)}</p>
+      ) : (
         <ul className="cal-words">
           {list.map((h) => (
             <li key={h.key}>
               {h.key === focusKey && <span className="focus-chip">Focus 重點</span>}
-              <b>{h.label}</b> <span className="tc">{h.label_zh}</span>: put <q>{firstWord(h.match)}</q> in the title
-              <span className="sub">{h.tiny ? `Tiny: ${h.tiny}` : ''}{h.full_minutes ? ` · full version from ${h.full_minutes} minutes` : ''}{h.after ? ` · ${h.after}` : ''}</span>
+              <b>{h.label}</b> <span className="tc">{h.label_zh}</span> <q>{firstWord(h.match)}</q>
+              <span className="sub inline"> {h.tiny ? `tiny: ${h.tiny}` : ''}{h.full_minutes ? `; full from ${h.full_minutes} minutes` : ''}</span>
             </li>
           ))}
-          {running.map((e) => <li key={e.key}><b>Experiment:</b> {e.action}: put <q>{firstWord(e.match)}</q> in the title</li>)}
+          {running.map((e) => <li key={e.key}><b>Experiment:</b> {e.action} <q>{firstWord(e.match)}</q></li>)}
         </ul>
-      )}
+      ))}
       <a className="btn ghost" href={`https://calendar.google.com/calendar/r/day/${target.replace(/-/g, '/')}`} target="_blank" rel="noreferrer">{when === 'am' ? 'Open yesterday 開啟昨日' : 'Open today 開啟今日'}</a>
     </div>
   )
