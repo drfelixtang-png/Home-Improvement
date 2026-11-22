@@ -160,8 +160,8 @@ export function experimentResult(e: Experiment, checkins: Checkin[], today: stri
 }
 
 export const EXP_IDEAS: { question: string; action: string; match: string; measure: ExpMeasure }[] = [
-  { question: 'Does a 10-minute walk in the morning light help me wind down earlier?', action: '10-minute walk outside within an hour of waking', match: 'morning walk', measure: 'wind_down' },
+  { question: 'Does a 10-minute walk in the morning light help me go to bed earlier?', action: '10-minute walk outside within an hour of waking', match: 'morning walk', measure: 'bed_time' },
   { question: 'Do nights without red wine give me better sleep?', action: 'No red wine tonight', match: 'no wine', measure: 'sleep_quality' },
-  { question: 'Does putting the phone on the charger when winding down help me sleep better?', action: 'Phone on the charger outside the bedroom when winding down', match: 'phone away', measure: 'sleep_quality' },
+  { question: 'Does putting the phone away an hour before bed help me sleep better?', action: 'Phone on the charger outside the bedroom an hour before bed', match: 'phone away', measure: 'sleep_quality' },
   { question: 'Does Baduanjin in the morning lift my energy for the day?', action: 'Baduanjin before 10 am', match: 'baduanjin', measure: 'energy_pm' },
 ]

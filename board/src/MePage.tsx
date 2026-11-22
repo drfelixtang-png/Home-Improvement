@@ -114,7 +114,7 @@ function Morning({ day, c, prev, habits, focusKey, busy, experiments, ledger, on
     setMsg('Saving…')
     try {
       await saveCheckin(day, {
-        bed_time: f.bed_time, wake_time: f.wake_time, wind_down: f.wind_down, wine_glasses: f.wine_glasses,
+        bed_time: f.bed_time, wake_time: f.wake_time, wine_glasses: f.wine_glasses,
         sleep_hours: sleepFrom(f.bed_time, f.wake_time) ?? f.sleep_hours, sleep_quality: f.sleep_quality, energy_am: f.energy_am, mood_am: f.mood_am,
         priorities: pr.map((p) => p.trim()), morning_note: f.morning_note, morning_at: new Date().toISOString(),
       })
@@ -131,7 +131,6 @@ function Morning({ day, c, prev, habits, focusKey, busy, experiments, ledger, on
       <div className="field">
         <span className="field-l">Last night 昨晚 <span className="sub inline">a record, not a test</span></span>
         <div className="sleep-times">
-          <label htmlFor="wind">Started winding down 開始放鬆<QuarterTime id="wind" value={f.wind_down} startHour={20} onChange={(v) => setF({ ...f, wind_down: v })} /></label>
           <label htmlFor="bed">Went to bed 上床<QuarterTime id="bed" value={f.bed_time} startHour={20} onChange={(v) => setF({ ...f, bed_time: v })} /></label>
           <label htmlFor="wake">Woke up 起床<QuarterTime id="wake" value={f.wake_time} startHour={4} onChange={(v) => setF({ ...f, wake_time: v })} /></label>
           <span className="sleep-total">{sleepFrom(f.bed_time, f.wake_time) !== null ? <><b>{sleepFrom(f.bed_time, f.wake_time)}</b> h</> : <span className="sub inline">hours worked out for you</span>}</span>
@@ -310,6 +309,7 @@ function SleepRecord({ habits, byDay, today, onSaveHabits }: { habits: Habit[]; 
     if (week.met >= 5) advice = { text: `${week.met} of the last ${week.recorded} nights on time. Ready to move the wind-down goal 15 minutes earlier?`, to: fromLateness(goal - 15) }
     else if (week.met <= 1 && week.usual && lateness(week.usual) > goal) advice = { text: `Your usual wind-down time lately is ${hm(week.usual)}. Start from there and move earlier step by step?`, to: week.usual }
   }
+  const anyWind = nights.some((c) => c.wind_down)
   const wine7 = nights.filter((c) => c.day > addDays(today, -7) && c.wine_glasses !== null)
   return (
     <section className="sub-panel span-2">
@@ -324,11 +324,11 @@ function SleepRecord({ habits, byDay, today, onSaveHabits }: { habits: Habit[]; 
       {msg && <span className="sub" role="status">{msg}</span>}
       {nights.length ? (
         <div className="tbl-wrap"><table className="tbl">
-          <thead><tr><th>Morning of</th><th>Wind-down</th><th>Bed</th><th>Woke</th><th className="n">Hours</th><th className="n">Wine</th><th className="n">Quality</th></tr></thead>
+          <thead><tr><th>Morning of</th>{anyWind && <th>Wind-down</th>}<th>Bed</th><th>Woke</th><th className="n">Hours</th><th className="n">Wine</th><th className="n">Quality</th></tr></thead>
           <tbody>{nights.map((c) => (
             <tr key={c.day}>
               <td>{shortDay(c.day)}</td>
-              <td>{c.wind_down ? hm(c.wind_down) : '–'}</td>
+              {anyWind && <td>{c.wind_down ? hm(c.wind_down) : '–'}</td>}
               <td>{c.bed_time ? hm(c.bed_time) : '–'}</td>
               <td>{c.wake_time ? hm(c.wake_time) : '–'}</td>
               <td className="n">{sleepFrom(c.bed_time, c.wake_time) ?? '–'}</td>
