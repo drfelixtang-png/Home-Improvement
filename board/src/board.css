@@ -602,3 +602,14 @@ ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
 .cal-words-line { margin: 2px 0; font-size: 0.88rem; }
 .cal-words-line q { font-family: var(--mono); color: var(--accent); }
 .cal-words q { font-family: var(--mono); color: var(--accent); }
+/* Lottery */
+.balls { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
+.ball { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; border-radius: 50%; font-family: var(--mono); font-size: 0.8rem; border: 1px solid var(--line); color: var(--muted); }
+.ball.hit { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700; }
+.ball.extra { border-style: dashed; margin-left: 4px; }
+.ball.extra.hit { border-style: solid; }
+.lotto-games { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.lotto-games li { display: flex; flex-direction: column; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.lotto-edit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.8rem; }
+.lotto-edit input { font: inherit; width: 120px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; }
+.stat.dn b { color: var(--crit); } .stat.up b { color: var(--good); }

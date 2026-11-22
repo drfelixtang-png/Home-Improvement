@@ -10,6 +10,7 @@ import {
 import { FinOverview } from './FinOverview'
 import { YieldCheck } from './FinYield'
 import { FinPlan } from './FinPlan'
+import { FinLottery } from './FinLottery'
 import { spendingMonthly } from './finPlan'
 import { FinStatements } from './FinStatements'
 import { sources } from './finStatements'
@@ -33,6 +34,7 @@ const FIN_TABS = [
   { key: 'history', label: 'History', zh: '歷史' },
   { key: 'plan', label: 'Retirement', zh: '退休' },
   { key: 'statements', label: 'Statements', zh: '月結單' },
+  { key: 'lottery', label: 'Lottery', zh: '彩票' },
 ]
 const KIND: Record<AccountKind, [string, string]> = {
   cash: ['Cash', '現金'], gic: ['GIC', '定期'], investment: ['Investment', '投資'],
@@ -880,6 +882,7 @@ export function FinancePage({ f, fx, userId, onReload, lang, tab: rawTab }: { f:
       )}
 
       {tab === 'statements' && <FinStatements f={f} userId={userId} onDone={onReload} />}
+      {tab === 'lottery' && <FinLottery show={show} />}
       {tab === 'plan' && <FinPlan f={f} fx={fx} show={show} userId={userId} onDone={onReload} />}
 
       {tab === 'history' && (
